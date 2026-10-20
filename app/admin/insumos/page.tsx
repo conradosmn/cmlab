@@ -1,0 +1,1248 @@
+"use client";
+
+import React, { useState, useMemo } from "react";
+import { AdminNav } from "@/components/AdminNav";
+import { useCMLabStore } from "@/lib/store";
+import { Accessory, AccessoryCategory, Filament } from "@/lib/types";
+import {
+  ShoppingCart,
+  Plus,
+  RefreshCw,
+  CheckCircle2,
+  Layers,
+  Wrench,
+  Edit3,
+  Trash2,
+  KeyRound,
+  Droplets,
+  Lightbulb,
+  Magnet,
+  Package,
+  Calculator,
+  ChevronDown,
+  Calendar,
+  Check,
+} from "lucide-react";
+
+const DEFAULT_FILAMENT_BRANDS = [
+  "Voolt3D",
+  "3DLab",
+  "Bambu Lab",
+  "eSUN",
+  "Creality",
+  "GTMax3D",
+  "F3D",
+  "Cliever",
+  "Elegoo",
+  "Sunlu",
+];
+
+const RESOURCE_CATEGORIES: {
+  id: AccessoryCategory;
+  label: string;
+  badgeColor: string;
+}[] = [
+  {
+    id: "chaveiro",
+    label: "Chaveiro & Ferragens (Argola, Corrente, Ilha, Mosquetão)",
+    badgeColor: "bg-terracota/15 text-terracota",
+  },
+  {
+    id: "silicone_acabamento",
+    label: "Gota de Silicone, Feltro & Acabamento Base",
+    badgeColor: "bg-musgo/15 text-musgo",
+  },
+  {
+    id: "eletrica",
+    label: "Elétrica & Iluminação (Kit LED, Soquete, Cabo)",
+    badgeColor: "bg-argila/30 text-musgo",
+  },
+  {
+    id: "fixacao",
+    label: "Fixação & Ímãs (Neodímio, Dupla-Face 3M)",
+    badgeColor: "bg-borda text-musgo",
+  },
+  {
+    id: "embalagem",
+    label: "Embalagem, Tags & Mimo Cliente",
+    badgeColor: "bg-areia text-oliva border border-borda",
+  },
+  {
+    id: "outros",
+    label: "Outros Insumos",
+    badgeColor: "bg-linho text-oliva",
+  },
+];
+
+const QUICK_RESOURCE_PRESETS: {
+  code: string;
+  name: string;
+  category: AccessoryCategory;
+  unit_label: string;
+  pack_price: number;
+  pack_quantity: number;
+  min_stock_alert: number;
+}[] = [
+  {
+    code: "ACC-COR-01",
+    name: "Argola Italiana 25mm + Corrente p/ Chaveiro",
+    category: "chaveiro",
+    unit_label: "un.",
+    pack_price: 38.0,
+    pack_quantity: 100,
+    min_stock_alert: 25,
+  },
+  {
+    code: "ACC-SIL-03",
+    name: "Gota de Silicone Antiderrapante 10mm (Cartela)",
+    category: "silicone_acabamento",
+    unit_label: "gota",
+    pack_price: 24.0,
+    pack_quantity: 200,
+    min_stock_alert: 40,
+  },
+  {
+    code: "ACC-ILH-02",
+    name: "Ilha / Elo de Junção Metálico p/ Pingente",
+    category: "chaveiro",
+    unit_label: "un.",
+    pack_price: 18.0,
+    pack_quantity: 100,
+    min_stock_alert: 25,
+  },
+  {
+    code: "ACC-MOS-07",
+    name: "Mosquetão Lagosta Dourado p/ Bolsa/Chaveiro",
+    category: "chaveiro",
+    unit_label: "un.",
+    pack_price: 42.0,
+    pack_quantity: 50,
+    min_stock_alert: 15,
+  },
+  {
+    code: "ACC-IMA-04",
+    name: "Ímã de Neodímio 8x3mm Super Forte",
+    category: "fixacao",
+    unit_label: "un.",
+    pack_price: 45.0,
+    pack_quantity: 50,
+    min_stock_alert: 15,
+  },
+  {
+    code: "ACC-LED-05",
+    name: "Kit Elétrico Luminária (Cabo + Interruptor + LED Quente)",
+    category: "eletrica",
+    unit_label: "kit",
+    pack_price: 165.0,
+    pack_quantity: 10,
+    min_stock_alert: 3,
+  },
+];
+
+export default function AdminInsumosPage() {
+  const {
+    filaments,
+    accessories,
+    products,
+    orders,
+    addOrUpdateFilament,
+    deleteFilament,
+    restockFilament,
+    addOrUpdateAccessory,
+    deleteAccessory,
+    restockAccessory,
+  } = useCMLabStore();
+
+  const [activeTab, setActiveTab] = useState<"all" | "accessories" | "filaments">("all");
+
+  // Estados do Formulário de Recurso / Acessório (Chaveiro, Gota de Silicone, etc.)
+  const [editingAccId, setEditingAccId] = useState<string | null>(null);
+  const [accCode, setAccCode] = useState("ACC-REC-07");
+  const [accName, setAccName] = useState("");
+  const [accCategory, setAccCategory] = useState<AccessoryCategory>("chaveiro");
+  const [accUnitLabel, setAccUnitLabel] = useState("un.");
+  const [accSupplier, setAccSupplier] = useState("Mercado Livre");
+  const [packPrice, setPackPrice] = useState(38);
+  const [packQty, setPackQty] = useState(100);
+  const [stockQty, setStockQty] = useState(100);
+  const [minStockAlert, setMinStockAlert] = useState(20);
+
+  // Estados do Formulário de Bobina de Filamento
+  const [editingFilId, setEditingFilId] = useState<string | null>(null);
+  const [code, setCode] = useState("PLA-VOO-09");
+  const [brand, setBrand] = useState("Voolt3D");
+  const [customBrands, setCustomBrands] = useState<string[]>([]);
+  const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState(false);
+  const [purchaseDate, setPurchaseDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const [material, setMaterial] = useState("PLA");
+  const [colorName, setColorName] = useState("");
+  const [hexCode, setHexCode] = useState("#A3522B");
+  const [purchasePrice, setPurchasePrice] = useState(115);
+  const [initialWeight, setInitialWeight] = useState(1000);
+  const [remainingWeight, setRemainingWeight] = useState(1000);
+  const [isOnOrder, setIsOnOrder] = useState(false);
+
+  // Lista unificada de marcas em cascata (Principais + Marcas já salvas no banco + Marcas criadas pelo usuário)
+  const availableBrands = useMemo(() => {
+    const set = new Set<string>(DEFAULT_FILAMENT_BRANDS);
+    filaments.forEach((f) => {
+      if (f.brand && f.brand.trim()) set.add(f.brand.trim());
+    });
+    customBrands.forEach((b) => {
+      if (b && b.trim()) set.add(b.trim());
+    });
+    return Array.from(set);
+  }, [filaments, customBrands]);
+
+  const brandExistsInList = useMemo(() => {
+    const clean = brand.trim().toLowerCase();
+    if (!clean) return true;
+    return availableBrands.some((b) => b.toLowerCase() === clean);
+  }, [brand, availableBrands]);
+
+  const previewUnitCost = packQty > 0 ? packPrice / packQty : 0;
+  const previewGramCost = initialWeight > 0 ? purchasePrice / initialWeight : 0;
+
+  // Pedidos pagos ativos na feira
+  const activePaidOrders = useMemo(
+    () =>
+      orders.filter(
+        (o) =>
+          o.payment_status === "paid" &&
+          o.queue_status !== "done" &&
+          o.queue_status !== "delivered"
+      ),
+    [orders]
+  );
+
+  // Lista de Compras Automática: Bobinas de Filamento
+  const filamentShoppingList = useMemo(() => {
+    return filaments
+      .map((fil) => {
+        const committedGrams = activePaidOrders.reduce((acc, ord) => {
+          const matchGrams = ord.selected_colors
+            .filter((sc) => sc.filament_id === fil.id)
+            .reduce((s, sc) => s + sc.weight_grams, 0);
+          return acc + matchGrams;
+        }, 0);
+
+        const ordersUsingThisColor = activePaidOrders.filter((ord) =>
+          ord.selected_colors.some((sc) => sc.filament_id === fil.id)
+        );
+
+        const revenueGeneratedByColor = ordersUsingThisColor.reduce(
+          (acc, o) => acc + o.total_price,
+          0
+        );
+
+        const needsPurchase =
+          fil.is_on_order_color ||
+          fil.remaining_weight_grams < 150 ||
+          committedGrams > fil.remaining_weight_grams;
+
+        return {
+          filament: fil,
+          committedGrams,
+          ordersCount: ordersUsingThisColor.length,
+          revenueGeneratedByColor,
+          needsPurchase,
+        };
+      })
+      .filter((item) => item.needsPurchase);
+  }, [filaments, activePaidOrders]);
+
+  // Lista de Compras Automática: Recursos / Acessórios (Chaveiros, Gotas de Silicone, etc.)
+  const accessoryShoppingList = useMemo(() => {
+    return accessories
+      .map((acc) => {
+        const committedUnits = activePaidOrders.reduce((sum, ord) => {
+          const prod = products.find((p) => p.id === ord.product_id);
+          const spec = prod?.accessories.find((a) => a.accessory_id === acc.id);
+          return sum + (spec ? spec.quantity : 0);
+        }, 0);
+
+        const minAlert = acc.min_stock_alert ?? 20;
+        const needsPurchase =
+          acc.stock_quantity <= minAlert || committedUnits > acc.stock_quantity;
+
+        return {
+          accessory: acc,
+          committedUnits,
+          needsPurchase,
+        };
+      })
+      .filter((item) => item.needsPurchase);
+  }, [accessories, activePaidOrders, products]);
+
+  // Salvar ou Atualizar Recurso (Chaveiro, Gota de Silicone, etc.)
+  const handleSaveAccessory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accName.trim()) return;
+
+    const payload: Accessory = {
+      id: editingAccId || `acc-${Date.now()}`,
+      code: accCode.trim(),
+      name: accName.trim(),
+      category: accCategory,
+      unit_label: accUnitLabel.trim() || "un.",
+      supplier: accSupplier.trim() || "Fornecedor Padrão",
+      purchase_date: new Date().toISOString().slice(0, 10),
+      pack_price: Number(packPrice),
+      pack_quantity: Number(packQty),
+      stock_quantity: Number(stockQty),
+      min_stock_alert: Number(minStockAlert),
+      unit_cost: Number((packPrice / Math.max(1, packQty)).toFixed(4)),
+      active: true,
+    };
+
+    await addOrUpdateAccessory(payload);
+    setEditingAccId(null);
+    setAccName("");
+    setAccCode(`ACC-REC-0${accessories.length + 2}`);
+  };
+
+  const handleEditAccessory = (acc: Accessory) => {
+    setEditingAccId(acc.id);
+    setAccCode(acc.code);
+    setAccName(acc.name);
+    setAccCategory(acc.category || "chaveiro");
+    setAccUnitLabel(acc.unit_label || "un.");
+    setAccSupplier(acc.supplier || "");
+    setPackPrice(acc.pack_price);
+    setPackQty(acc.pack_quantity);
+    setStockQty(acc.stock_quantity);
+    setMinStockAlert(acc.min_stock_alert ?? 20);
+  };
+
+  const handleLoadResourcePreset = (preset: (typeof QUICK_RESOURCE_PRESETS)[0]) => {
+    setEditingAccId(null);
+    setAccCode(preset.code);
+    setAccName(preset.name);
+    setAccCategory(preset.category);
+    setAccUnitLabel(preset.unit_label);
+    setPackPrice(preset.pack_price);
+    setPackQty(preset.pack_quantity);
+    setStockQty(preset.pack_quantity);
+    setMinStockAlert(preset.min_stock_alert);
+  };
+
+  // Salvar ou Atualizar Bobina de Filamento
+  const handleSaveFilament = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!colorName.trim()) return;
+    const cleanBrand = brand.trim() || "Voolt3D";
+
+    // Se digitou uma marca nova que não existia, adiciona automaticamente à lista em cascata!
+    if (
+      !availableBrands.some((b) => b.toLowerCase() === cleanBrand.toLowerCase())
+    ) {
+      setCustomBrands((prev) => [...prev, cleanBrand]);
+    }
+
+    const newFil: Filament = {
+      id: editingFilId || `fil-${Date.now()}`,
+      code: code.trim(),
+      brand: cleanBrand,
+      material: material.trim(),
+      color_name: colorName.trim(),
+      hex_code: hexCode,
+      purchase_date: purchaseDate || new Date().toISOString().slice(0, 10),
+      purchase_price: Number(purchasePrice),
+      initial_weight_grams: Number(initialWeight),
+      remaining_weight_grams: isOnOrder ? 0 : Number(remainingWeight),
+      cost_per_gram: Number((purchasePrice / Math.max(1, initialWeight)).toFixed(4)),
+      is_on_order_color: isOnOrder,
+      restock_lead_time_days: 3,
+      active: true,
+    };
+    await addOrUpdateFilament(newFil);
+    setEditingFilId(null);
+    setColorName("");
+    setIsBrandDropdownOpen(false);
+    setCode(`PLA-${cleanBrand.slice(0, 3).toUpperCase()}-0${filaments.length + 2}`);
+  };
+
+  const handleEditFilament = (fil: Filament) => {
+    setEditingFilId(fil.id);
+    setCode(fil.code);
+    setBrand(fil.brand);
+    setPurchaseDate(fil.purchase_date || new Date().toISOString().slice(0, 10));
+    setMaterial(fil.material);
+    setColorName(fil.color_name);
+    setHexCode(fil.hex_code);
+    setPurchasePrice(fil.purchase_price);
+    setInitialWeight(fil.initial_weight_grams);
+    setRemainingWeight(fil.remaining_weight_grams);
+    setIsOnOrder(fil.is_on_order_color);
+  };
+
+  return (
+    <div className="min-h-screen bg-linho">
+      <AdminNav />
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+        {/* Cabeçalho do Gerenciador de Recursos + Filtro Rápido */}
+        <section className="bg-areia border border-borda rounded-3xl p-6 shadow-atelier flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <span className="text-xs uppercase tracking-widest text-terracota font-bold">
+              Gerenciador Central de Recursos • Impacto Automático no Custo dos Produtos
+            </span>
+            <h1 className="text-2xl sm:text-3xl font-serif font-bold text-musgo">
+              Recursos de Produção: Ferragens de Chaveiro, Gotas de Silicone & Filamentos
+            </h1>
+            <p className="text-xs text-oliva mt-1">
+              Qualquer alteração no valor do pacote de argolas, gotas de silicone, ímãs ou
+              bobinas recalcula automaticamente o custo de produção de todas as peças do
+              catálogo!
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab("all")}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-semibold transition ${
+                activeTab === "all"
+                  ? "bg-musgo text-linho shadow-sm"
+                  : "bg-linho text-musgo border border-borda"
+              }`}
+            >
+              Visão Completa
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("accessories")}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-semibold transition ${
+                activeTab === "accessories"
+                  ? "bg-musgo text-linho shadow-sm"
+                  : "bg-linho text-musgo border border-borda"
+              }`}
+            >
+              Chaveiros, Silicone & Insumos ({accessories.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("filaments")}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-semibold transition ${
+                activeTab === "filaments"
+                  ? "bg-musgo text-linho shadow-sm"
+                  : "bg-linho text-musgo border border-borda"
+              }`}
+            >
+              Bobinas de Filamento ({filaments.length})
+            </button>
+          </div>
+        </section>
+
+        {/* BLOCO 1: GERENCIADOR DE RECURSOS / INSUMOS DE ACABAMENTO (CHAVEIRO, GOTA DE SILICONE, ETC.) */}
+        {(activeTab === "all" || activeTab === "accessories") && (
+          <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Lista de Recursos Cadastrados e Vínculo com Custo dos Produtos */}
+            <div className="lg:col-span-7 bg-areia border border-borda rounded-3xl p-6 shadow-atelier space-y-5">
+              <div className="flex items-center justify-between border-b border-borda pb-3">
+                <div>
+                  <h2 className="text-xl font-serif font-bold text-musgo flex items-center gap-2">
+                    <Wrench className="w-5 h-5 text-terracota" />
+                    <span>
+                      Insumos & Componentes (Chaveiros, Gotas de Silicone, Ímãs, LED)
+                    </span>
+                  </h2>
+                  <p className="text-xs text-oliva">
+                    Estes itens entram diretamente na Ficha Técnica e no Custo de Produção
+                    das peças
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {accessories.map((acc) => {
+                  // Descobre quais produtos do catálogo utilizam este recurso
+                  const linkedProducts = products.filter((p) =>
+                    (p.accessories || []).some((pa) => pa.accessory_id === acc.id)
+                  );
+                  const isLowStock = acc.stock_quantity <= (acc.min_stock_alert ?? 20);
+
+                  return (
+                    <div
+                      key={acc.id}
+                      className={`bg-linho border rounded-2xl p-4 space-y-3 transition ${
+                        editingAccId === acc.id
+                          ? "border-2 border-terracota shadow-md"
+                          : "border-borda"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-areia border border-borda text-oliva">
+                              {acc.code}
+                            </span>
+                            <h3 className="font-serif font-bold text-lg text-musgo">
+                              {acc.name}
+                            </h3>
+                            {isLowStock && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-terracota text-white">
+                                Repor Estoque
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="text-xs text-oliva flex flex-wrap items-center gap-3">
+                            <span>
+                              Pacote:{" "}
+                              <strong className="text-musgo">
+                                R$ {acc.pack_price.toFixed(2).replace(".", ",")}
+                              </strong>{" "}
+                              c/ {acc.pack_quantity} {acc.unit_label || "un."}
+                            </span>
+                            <span>•</span>
+                            <span className="px-2 py-0.5 rounded-lg bg-terracota/10 text-terracota font-bold">
+                              Custo no Produto: R${" "}
+                              {acc.unit_cost.toFixed(2).replace(".", ",")}/
+                              {acc.unit_label || "un."}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="text-right mr-2">
+                            <span className="text-[10px] uppercase text-oliva block">
+                              Saldo Atual
+                            </span>
+                            <span
+                              className={`text-lg font-serif font-bold ${
+                                isLowStock ? "text-terracota" : "text-musgo"
+                              }`}
+                            >
+                              {acc.stock_quantity} {acc.unit_label || "un."}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => restockAccessory(acc.id, acc.pack_quantity)}
+                            title={`Adicionar +1 pacote (+${acc.pack_quantity} un.) ao estoque`}
+                            className="px-3 py-2 rounded-xl bg-areia hover:bg-borda/50 border border-borda text-xs font-semibold text-musgo transition"
+                          >
+                            +{acc.pack_quantity}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleEditAccessory(acc)}
+                            title="Editar custo ou quantidade deste recurso"
+                            className="p-2 rounded-xl bg-areia hover:bg-borda/50 border border-borda text-musgo transition"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  `Excluir o recurso "${acc.name}"? Ele será removido da ficha técnica dos produtos.`
+                                )
+                              ) {
+                                deleteAccessory(acc.id);
+                              }
+                            }}
+                            title="Excluir recurso"
+                            className="p-2 rounded-xl bg-areia hover:bg-terracota/15 border border-borda text-oliva hover:text-terracota transition"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Mostra em quais produtos este recurso entra no custo */}
+                      <div className="pt-2 border-t border-borda/60 flex flex-wrap items-center gap-1.5 text-[11px]">
+                        <span className="text-oliva font-medium">
+                          Entra no custo de ({linkedProducts.length} produtos):
+                        </span>
+                        {linkedProducts.length === 0 ? (
+                          <span className="text-oliva italic">
+                            Ainda não vinculado — vincule em Catálogo & Custos
+                          </span>
+                        ) : (
+                          linkedProducts.map((p) => {
+                            const itemSpec = p.accessories.find(
+                              (pa) => pa.accessory_id === acc.id
+                            );
+                            const q = itemSpec?.quantity || 1;
+                            const totalItemCost = q * acc.unit_cost;
+                            return (
+                              <span
+                                key={p.id}
+                                className="px-2 py-0.5 rounded-full bg-areia border border-borda text-musgo font-medium"
+                              >
+                                {p.name.split(" ")[0]} ({q}x = R${" "}
+                                {totalItemCost.toFixed(2).replace(".", ",")})
+                              </span>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Formulário Completo de Criação / Edição de Recurso (Chaveiro, Gota de Silicone, etc.) */}
+            <form
+              onSubmit={handleSaveAccessory}
+              className="lg:col-span-5 bg-areia border border-borda rounded-3xl p-6 shadow-atelier space-y-4 h-fit"
+            >
+              <div className="flex items-center justify-between border-b border-borda pb-3">
+                <div>
+                  <span className="text-[11px] uppercase tracking-wider text-terracota font-bold">
+                    {editingAccId ? "Editando Recurso" : "Novo Recurso de Custo"}
+                  </span>
+                  <h3 className="text-xl font-serif font-bold text-musgo">
+                    {editingAccId
+                      ? "Atualizar Recurso / Insumo"
+                      : "Cadastrar Chaveiro, Silicone ou Insumo"}
+                  </h3>
+                </div>
+                {editingAccId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingAccId(null);
+                      setAccName("");
+                    }}
+                    className="text-xs text-terracota underline font-semibold"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+
+              {/* Atalhos de 1 Clique para Recursos Típicos */}
+              <div>
+                <span className="text-[11px] text-oliva font-semibold block mb-1.5">
+                  Modelos Rápidos (1 clique para preencher):
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {QUICK_RESOURCE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.code}
+                      type="button"
+                      onClick={() => handleLoadResourcePreset(preset)}
+                      className="px-2.5 py-1 rounded-lg bg-linho hover:bg-borda/50 border border-borda text-[11px] font-medium text-musgo transition"
+                    >
+                      + {preset.name.split(" (")[0]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-oliva font-semibold mb-1">
+                    Código
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={accCode}
+                    onChange={(e) => setAccCode(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs text-musgo font-mono"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-oliva font-semibold mb-1">
+                    Tipo de Recurso
+                  </label>
+                  <select
+                    value={accCategory}
+                    onChange={(e) => setAccCategory(e.target.value as AccessoryCategory)}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs text-musgo font-semibold"
+                  >
+                    {RESOURCE_CATEGORIES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-oliva font-semibold mb-1">
+                  Nome do Recurso (Ex: Argola Chaveiro, Gota de Silicone Base)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={accName}
+                  onChange={(e) => setAccName(e.target.value)}
+                  placeholder="Ex: Gota de Silicone 10mm Antiderrapante"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-linho border border-borda text-sm text-musgo font-semibold"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-oliva font-semibold mb-1">
+                    Preço Pago Pacote (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={packPrice}
+                    onChange={(e) => setPackPrice(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-sm font-bold text-musgo"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-oliva font-semibold mb-1">
+                    Qtd no Pacote
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={packQty}
+                    onChange={(e) => setPackQty(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-sm font-bold text-musgo"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-oliva font-semibold mb-1">
+                    Unidade
+                  </label>
+                  <input
+                    type="text"
+                    value={accUnitLabel}
+                    onChange={(e) => setAccUnitLabel(e.target.value)}
+                    placeholder="un., gota, kit"
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs text-musgo"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-oliva font-semibold mb-1">
+                    Estoque Atual Disponível
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={stockQty}
+                    onChange={(e) => setStockQty(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-sm font-bold text-musgo"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-oliva font-semibold mb-1">
+                    Alerta Estoque Mínimo
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={minStockAlert}
+                    onChange={(e) => setMinStockAlert(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-sm text-musgo"
+                  />
+                </div>
+              </div>
+
+              {/* Preview do Custo Unitário Calculado Automaticamente */}
+              <div className="bg-linho p-3.5 rounded-2xl border border-argila flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs text-musgo">
+                  <Calculator className="w-4 h-4 text-terracota" />
+                  <span>Custo Unitário Calculado Automaticamente:</span>
+                </div>
+                <span className="text-lg font-serif font-bold text-terracota">
+                  R$ {previewUnitCost.toFixed(2).replace(".", ",")} /{" "}
+                  {accUnitLabel || "un."}
+                </span>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3.5 rounded-2xl bg-terracota hover:bg-terracota-hover text-white text-sm font-semibold shadow-sm transition flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>
+                  {editingAccId
+                    ? "Salvar Alterações e Recalcular Produtos"
+                    : "Adicionar Recurso ao Gerenciador"}
+                </span>
+              </button>
+            </form>
+          </section>
+        )}
+
+        {/* BLOCO 2: LISTA DE COMPRAS AUTOMÁTICA UNIFICADA (BOBINAS + CHAVEIROS/SILICONE) */}
+        <section className="bg-areia border-2 border-terracota/50 rounded-3xl p-6 shadow-atelier space-y-4">
+          <div className="flex items-center gap-3">
+            <span className="p-3 rounded-2xl bg-terracota text-white">
+              <ShoppingCart className="w-6 h-6" />
+            </span>
+            <div>
+              <span className="text-xs uppercase tracking-widest text-terracota font-bold">
+                Alerta Inteligente de Reposição • Feira TCE
+              </span>
+              <h2 className="text-2xl font-serif font-bold text-musgo">
+                Lista de Compras Automática (
+                {filamentShoppingList.length + accessoryShoppingList.length} itens)
+              </h2>
+              <p className="text-xs text-oliva">
+                Calcula gramas de filamento e unidades de chaveiro/silicone comprometidos
+                nos pedidos já pagos na feira.
+              </p>
+            </div>
+          </div>
+
+          {filamentShoppingList.length === 0 && accessoryShoppingList.length === 0 ? (
+            <div className="bg-linho p-4 rounded-2xl border border-borda text-xs text-musgo flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-musgo" />
+              <span>
+                Todos os filamentos, chaveiros e gotas de silicone possuem estoque suficiente
+                para a fila atual!
+              </span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filamentShoppingList.map((item) => (
+                <div
+                  key={item.filament.id}
+                  className="bg-linho border border-borda rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      className="w-8 h-8 rounded-full border-2 border-musgo/30 shrink-0 mt-0.5"
+                      style={{ backgroundColor: item.filament.hex_code }}
+                    />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-serif font-bold text-base text-musgo">
+                          Bobina: {item.filament.color_name}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-terracota/15 text-terracota font-bold">
+                          {item.filament.is_on_order_color ? "Sob Encomenda" : "Estoque Baixo"}
+                        </span>
+                      </div>
+                      <div className="text-xs text-oliva mt-0.5">
+                        Em casa: <strong>{item.filament.remaining_weight_grams}g</strong> •
+                        Comprometido: <strong>{item.committedGrams}g</strong>
+                      </div>
+                      <div className="text-xs text-musgo font-semibold mt-0.5">
+                        Caixa recebido nestes pedidos: R${" "}
+                        {item.revenueGeneratedByColor.toFixed(2).replace(".", ",")}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => restockFilament(item.filament.id, 1000)}
+                    className="px-3.5 py-2 rounded-xl bg-musgo text-linho text-xs font-semibold shrink-0 flex items-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>+1kg Bobina</span>
+                  </button>
+                </div>
+              ))}
+
+              {accessoryShoppingList.map((item) => (
+                <div
+                  key={item.accessory.id}
+                  className="bg-linho border border-borda rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-serif font-bold text-base text-musgo">
+                        Recurso: {item.accessory.name}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-terracota/15 text-terracota font-bold">
+                        Repor Pacote
+                      </span>
+                    </div>
+                    <div className="text-xs text-oliva mt-0.5">
+                      Saldo: <strong>{item.accessory.stock_quantity} un.</strong> •
+                      Comprometido na fila: <strong>{item.committedUnits} un.</strong>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      restockAccessory(item.accessory.id, item.accessory.pack_quantity)
+                    }
+                    className="px-3.5 py-2 rounded-xl bg-terracota text-white text-xs font-semibold shrink-0 flex items-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>+{item.accessory.pack_quantity} un.</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* BLOCO 3: GERENCIADOR DE BOBINAS DE FILAMENTO */}
+        {(activeTab === "all" || activeTab === "filaments") && (
+          <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-8 bg-areia border border-borda rounded-3xl p-6 shadow-atelier space-y-4">
+              <h2 className="text-xl font-serif font-bold text-musgo flex items-center gap-2">
+                <Layers className="w-5 h-5 text-terracota" />
+                <span>Bobinas de Filamento ({filaments.length})</span>
+              </h2>
+
+              <div className="space-y-3">
+                {filaments.map((fil) => {
+                  const pct = Math.max(
+                    0,
+                    Math.min(
+                      100,
+                      Math.round(
+                        (fil.remaining_weight_grams / (fil.initial_weight_grams || 1000)) *
+                          100
+                      )
+                    )
+                  );
+                  return (
+                    <div
+                      key={fil.id}
+                      className={`bg-linho border rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 ${
+                        editingFilId === fil.id
+                          ? "border-2 border-terracota"
+                          : "border-borda"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <span
+                          className="w-8 h-8 rounded-full border-2 border-musgo/25 shrink-0"
+                          style={{ backgroundColor: fil.hex_code }}
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-oliva">{fil.code}</span>
+                            <span className="font-serif font-bold text-lg text-musgo">
+                              {fil.color_name}
+                            </span>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-areia border border-borda text-oliva">
+                              {fil.brand} • {fil.material}
+                            </span>
+                          </div>
+                          <div className="text-xs text-oliva mt-0.5 flex flex-wrap items-center gap-2">
+                            <span>
+                              Rolo: R$ {fil.purchase_price.toFixed(2).replace(".", ",")}
+                            </span>
+                            <span>•</span>
+                            <span>
+                              Compra:{" "}
+                              {fil.purchase_date
+                                ? fil.purchase_date.split("-").reverse().join("/")
+                                : "—"}
+                            </span>
+                            <span>•</span>
+                            <strong className="text-terracota">
+                              Custo no Produto: R${" "}
+                              {fil.cost_per_gram.toFixed(3).replace(".", ",")}/g
+                            </strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-32 mr-1">
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-oliva">Saldo:</span>
+                            <span className="font-bold text-musgo">
+                              {fil.remaining_weight_grams}g
+                            </span>
+                          </div>
+                          <div className="w-full h-2 rounded-full bg-areia overflow-hidden border border-borda">
+                            <div
+                              className={`h-full ${
+                                pct < 20 ? "bg-terracota" : "bg-musgo"
+                              }`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => restockFilament(fil.id, 1000)}
+                          className="px-3 py-2 rounded-xl bg-areia hover:bg-borda/50 border border-borda text-xs font-semibold text-musgo"
+                        >
+                          +1kg
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEditFilament(fil)}
+                          className="p-2 rounded-xl bg-areia hover:bg-borda/50 border border-borda text-musgo"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Remover a bobina "${fil.color_name}"?`)) {
+                              deleteFilament(fil.id);
+                            }
+                          }}
+                          className="p-2 rounded-xl bg-areia hover:bg-terracota/15 border border-borda text-oliva hover:text-terracota"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <form
+              onSubmit={handleSaveFilament}
+              className="lg:col-span-4 bg-areia border border-borda rounded-3xl p-6 shadow-atelier space-y-4 h-fit"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-serif font-bold text-musgo">
+                  {editingFilId ? "Editar Bobina" : "Nova Bobina de Filamento"}
+                </h3>
+                {editingFilId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingFilId(null);
+                      setColorName("");
+                    }}
+                    className="text-xs text-terracota underline font-semibold"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-oliva font-semibold mb-1">
+                    Código
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs text-musgo font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-oliva font-semibold mb-1 flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-terracota" />
+                    <span>Data da Compra</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={purchaseDate}
+                    onChange={(e) => setPurchaseDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs text-musgo font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* Campo Marca com Cascata das Principais + Criação Automática ao Digitar */}
+              <div className="relative">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs text-oliva font-semibold">
+                    Marca do Filamento (Selecione ou Digite uma Nova)
+                  </label>
+                  {!brandExistsInList && brand.trim() && (
+                    <span className="text-[10px] font-bold text-terracota">
+                      ✨ Nova marca será adicionada à lista!
+                    </span>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={brand}
+                    onFocus={() => setIsBrandDropdownOpen(true)}
+                    onChange={(e) => {
+                      setBrand(e.target.value);
+                      setIsBrandDropdownOpen(true);
+                    }}
+                    placeholder="Escolha na lista ou digite nova marca..."
+                    className="w-full pl-3 pr-9 py-2.5 rounded-xl bg-linho border border-borda text-xs font-semibold text-musgo focus:outline-none focus:ring-2 focus:ring-argila"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsBrandDropdownOpen((v) => !v)}
+                    className="absolute right-2 top-2 p-1 text-oliva hover:text-musgo"
+                    title="Abrir lista de marcas"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {isBrandDropdownOpen && (
+                  <div className="absolute z-20 mt-1 w-full max-h-52 overflow-y-auto rounded-2xl bg-linho border-2 border-borda shadow-atelier-lg p-1.5 space-y-1">
+                    {!brandExistsInList && brand.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newB = brand.trim();
+                          setCustomBrands((prev) => [...prev, newB]);
+                          setBrand(newB);
+                          setIsBrandDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-xl bg-terracota text-white text-xs font-bold flex items-center justify-between"
+                      >
+                        <span>+ Criar marca &quot;{brand.trim()}&quot;</span>
+                        <span className="text-[10px] opacity-90">Salvar na cascata</span>
+                      </button>
+                    )}
+
+                    {availableBrands.map((b) => {
+                      const isSelected = b.toLowerCase() === brand.trim().toLowerCase();
+                      return (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => {
+                            setBrand(b);
+                            setIsBrandDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between transition ${
+                            isSelected
+                              ? "bg-musgo text-linho font-semibold"
+                              : "text-musgo hover:bg-areia"
+                          }`}
+                        >
+                          <span>{b}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs text-oliva font-semibold mb-1">
+                    Nome da Cor
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={colorName}
+                    onChange={(e) => setColorName(e.target.value)}
+                    placeholder="Ex: Verde Sálvia Silk"
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs text-musgo"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-oliva font-semibold mb-1">
+                    Cor Hex
+                  </label>
+                  <input
+                    type="color"
+                    value={hexCode}
+                    onChange={(e) => setHexCode(e.target.value)}
+                    className="w-full h-9 rounded-xl bg-linho border border-borda cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-oliva font-semibold mb-1">
+                    Material
+                  </label>
+                  <select
+                    value={material}
+                    onChange={(e) => setMaterial(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs text-musgo"
+                  >
+                    <option value="PLA">PLA</option>
+                    <option value="PLA Silk">PLA Silk</option>
+                    <option value="PETG">PETG</option>
+                    <option value="TPU">TPU</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-oliva font-semibold mb-1">
+                    Valor do Rolo (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.50"
+                    value={purchasePrice}
+                    onChange={(e) => setPurchasePrice(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs text-musgo font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-oliva font-semibold mb-1">
+                    Peso Inicial (g)
+                  </label>
+                  <input
+                    type="number"
+                    value={initialWeight}
+                    onChange={(e) => setInitialWeight(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs text-musgo"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-oliva font-semibold mb-1">
+                    Gramas Restantes
+                  </label>
+                  <input
+                    type="number"
+                    disabled={isOnOrder}
+                    value={isOnOrder ? 0 : remainingWeight}
+                    onChange={(e) => setRemainingWeight(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs text-musgo disabled:opacity-50"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-linho p-3 rounded-xl border border-borda flex items-center justify-between text-xs">
+                <span className="text-oliva">Custo por grama:</span>
+                <strong className="text-terracota">
+                  R$ {previewGramCost.toFixed(3).replace(".", ",")}/g
+                </strong>
+              </div>
+
+              <label className="flex items-center gap-2 text-xs text-musgo cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isOnOrder}
+                  onChange={(e) => setIsOnOrder(e.target.checked)}
+                  className="rounded text-terracota"
+                />
+                <span>Cor Sob Encomenda (0g em casa)</span>
+              </label>
+
+              <button
+                type="submit"
+                className="w-full py-3 rounded-2xl bg-musgo hover:bg-musgo/90 text-linho text-xs font-semibold shadow-sm transition flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{editingFilId ? "Salvar Bobina" : "Adicionar Bobina"}</span>
+              </button>
+            </form>
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}

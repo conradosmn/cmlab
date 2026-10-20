@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-linho: #FAF7F2;
+    --bg-areia: #F2ECE1;
+    --border-borda: #E2D9C8;
+    --text-musgo: #4A4F3B;
+    --text-oliva: #767A65;
+    --cta-terracota: #A3522B;
+    --accent-argila: #C89D7C;
+  }
+
+  body {
+    background-color: #FAF7F2;
+    color: #4A4F3B;
+    font-family: var(--font-jakarta), sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, .font-atelier-title {
+    font-family: var(--font-cormorant), Georgia, serif;
+  }
+}
+
+/* Custom subtle scrollbars for atelier look */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FAF7F2;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #E2D9C8;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #C89D7C;
+}
