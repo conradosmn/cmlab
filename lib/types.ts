@@ -140,6 +140,7 @@ export interface AdminUser {
   full_name: string;
   phone: string;
   is_master?: boolean;
+  must_change_password?: boolean;
   created_at: string;
 }
 

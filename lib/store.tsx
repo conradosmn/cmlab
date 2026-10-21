@@ -696,12 +696,20 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
   const loginAdmin = useCallback(
     (loginOrEmail: string, password: string): boolean => {
       const cleanLogin = loginOrEmail.trim().toLowerCase();
-      const found = adminUsers.find(
-        (u) =>
-          (u.username.trim().toLowerCase() === cleanLogin ||
-            u.email.trim().toLowerCase() === cleanLogin) &&
-          u.password === password
-      );
+      const found = adminUsers.find((u) => {
+        const loginMatches =
+          u.username.trim().toLowerCase() === cleanLogin ||
+          u.email.trim().toLowerCase() === cleanLogin;
+        if (!loginMatches) return false;
+        if (u.password === password) return true;
+        if (
+          u.must_change_password &&
+          u.password.trim().toLowerCase() === password.trim().toLowerCase()
+        ) {
+          return true;
+        }
+        return false;
+      });
       if (found) {
         setCurrentAdminUser(found);
         if (typeof window !== "undefined") {

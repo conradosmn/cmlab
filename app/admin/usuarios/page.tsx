@@ -15,9 +15,19 @@ import {
   Edit3,
   ShieldCheck,
   CheckCircle2,
-  Eye,
-  EyeOff,
+  RotateCcw,
 } from "lucide-react";
+
+function buildDefaultPasswordFromFullName(fullName: string): string {
+  const firstName = (fullName || "")
+    .trim()
+    .split(/\s+/)[0]
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  return `${firstName || "nome"}@12345`;
+}
 
 export default function AdminUsuariosPage() {
   const {
@@ -32,9 +42,9 @@ export default function AdminUsuariosPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPass, setShowPass] = useState(false);
   const [feedback, setFeedback] = useState<string>("");
+
+  const previewDefaultPassword = buildDefaultPasswordFromFullName(fullName);
 
   const resetForm = () => {
     setEditingId(null);
@@ -42,7 +52,6 @@ export default function AdminUsuariosPage() {
     setEmail("");
     setPhone("");
     setUsername("");
-    setPassword("");
   };
 
   const handleEditUser = (u: AdminUser) => {
@@ -51,13 +60,31 @@ export default function AdminUsuariosPage() {
     setEmail(u.email);
     setPhone(u.phone);
     setUsername(u.username);
-    setPassword(u.password);
     setFeedback("");
+  };
+
+  const handleResetUserPasswordToDefault = async (u: AdminUser) => {
+    const defaultPass = buildDefaultPasswordFromFullName(u.full_name);
+    if (
+      !confirm(
+        `Resetar a senha de "${u.full_name}" para a senha padrão de 1º acesso "${defaultPass}"?`
+      )
+    ) {
+      return;
+    }
+    await addOrUpdateAdminUser({
+      ...u,
+      password: defaultPass,
+      must_change_password: true,
+    });
+    setFeedback(
+      `Senha de "${u.full_name}" redefinida para "${defaultPass}" (troca obrigatória no próximo login).`
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !email.trim() || !phone.trim() || !password.trim()) {
+    if (!fullName.trim() || !email.trim() || !phone.trim()) {
       return;
     }
 
@@ -73,22 +100,25 @@ export default function AdminUsuariosPage() {
       ? adminUsers.find((u) => u.id === editingId)
       : undefined;
 
+    const generatedDefaultPassword = buildDefaultPasswordFromFullName(fullName);
+
     const payload: AdminUser = {
       id: editingId || `usr-${Date.now()}`,
       username: existing?.is_master ? "conradosmn" : derivedUsername,
       email: email.trim(),
-      password: password,
+      password: existing ? existing.password : generatedDefaultPassword,
       full_name: fullName.trim(),
       phone: phone.trim(),
       is_master: existing?.is_master || false,
+      must_change_password: existing ? existing.must_change_password : true,
       created_at: existing?.created_at || new Date().toISOString(),
     };
 
     await addOrUpdateAdminUser(payload);
     setFeedback(
       editingId
-        ? `Usuário "${payload.full_name}" atualizado com sucesso!`
-        : `Novo usuário "${payload.full_name}" cadastrado com sucesso!`
+        ? `Dados de "${payload.full_name}" atualizados com sucesso!`
+        : `Usuário "${payload.full_name}" cadastrado! Senha inicial: ${generatedDefaultPassword} (troca no 1º login).`
     );
     resetForm();
   };
@@ -108,8 +138,9 @@ export default function AdminUsuariosPage() {
               Usuários do Painel Admin
             </h1>
             <p className="text-xs sm:text-sm text-oliva mt-1">
-              Cadastre novos usuários para acessar a área administrativa (a loja Kiosk{" "}
-              <code>/feira</code> permanece livre para clientes).
+              Novos usuários recebem automaticamente a senha padrão{" "}
+              <code className="font-bold text-musgo">nome@12345</code> e são
+              solicitados a alterá-la no primeiro login.
             </p>
           </div>
 
@@ -225,33 +256,24 @@ export default function AdminUsuariosPage() {
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-oliva mb-1">
-                Senha de Acesso *
-              </label>
-              <div className="relative">
-                <KeyRound className="w-4 h-4 text-oliva absolute left-3.5 top-3" />
-                <input
-                  type={showPass ? "text" : "password"}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Defina a senha"
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-linho border border-borda text-sm text-musgo focus:outline-none focus:ring-2 focus:ring-argila"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPass((p) => !p)}
-                  className="absolute right-3 top-2.5 text-oliva hover:text-musgo p-0.5"
-                >
-                  {showPass ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
+            {!editingId && (
+              <div className="p-3.5 rounded-2xl bg-linho border border-borda space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-oliva font-semibold flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-terracota" />
+                    Senha Padrão do 1º Acesso:
+                  </span>
+                  <code className="px-2.5 py-0.5 rounded-lg bg-areia border border-borda text-musgo font-bold text-sm">
+                    {previewDefaultPassword}
+                  </code>
+                </div>
+                <p className="text-[11px] text-oliva">
+                  Ao entrar pela primeira vez com{" "}
+                  <strong>{previewDefaultPassword}</strong>, o sistema pedirá
+                  para o usuário criar sua própria senha.
+                </p>
               </div>
-            </div>
+            )}
 
             <button
               type="submit"
@@ -276,69 +298,94 @@ export default function AdminUsuariosPage() {
             </div>
 
             <div className="space-y-3">
-              {adminUsers.map((u) => (
-                <div
-                  key={u.id}
-                  className="bg-linho border border-borda rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-serif font-bold text-lg text-musgo">
-                        {u.full_name}
-                      </span>
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-areia border border-borda text-musgo">
-                        @{u.username}
-                      </span>
-                      {u.is_master && (
-                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-terracota text-white">
-                          Admin Principal
+              {adminUsers.map((u) => {
+                const defaultPassForUser = buildDefaultPasswordFromFullName(
+                  u.full_name
+                );
+                return (
+                  <div
+                    key={u.id}
+                    className="bg-linho border border-borda rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-serif font-bold text-lg text-musgo">
+                          {u.full_name}
                         </span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-areia border border-borda text-musgo">
+                          @{u.username}
+                        </span>
+                        {u.is_master ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-terracota text-white">
+                            Admin Principal
+                          </span>
+                        ) : u.must_change_password ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-argila/25 text-terracota border border-argila/50">
+                            1º Acesso Pendente ({u.password})
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-600/15 text-emerald-800">
+                            Senha Pessoal Ativa
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-4 text-xs text-oliva">
+                        <span className="inline-flex items-center gap-1">
+                          <Mail className="w-3.5 h-3.5 text-terracota" />
+                          {u.email}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Phone className="w-3.5 h-3.5 text-terracota" />
+                          {u.phone}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      {!u.is_master && u.username !== "conradosmn" && (
+                        <button
+                          type="button"
+                          onClick={() => handleResetUserPasswordToDefault(u)}
+                          title={`Redefinir para a senha inicial ${defaultPassForUser}`}
+                          className="px-2.5 py-2 rounded-xl bg-areia hover:bg-borda/50 border border-borda text-xs font-medium text-oliva hover:text-musgo flex items-center gap-1 transition"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 text-terracota" />
+                          <span>Resetar ({defaultPassForUser})</span>
+                        </button>
                       )}
-                    </div>
 
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-oliva">
-                      <span className="inline-flex items-center gap-1">
-                        <Mail className="w-3.5 h-3.5 text-terracota" />
-                        {u.email}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Phone className="w-3.5 h-3.5 text-terracota" />
-                        {u.phone}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => handleEditUser(u)}
-                      className="px-3 py-2 rounded-xl bg-areia hover:bg-borda/50 border border-borda text-xs font-semibold text-musgo flex items-center gap-1.5 transition"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                      <span>Editar</span>
-                    </button>
-
-                    {!u.is_master && u.username !== "conradosmn" && (
                       <button
                         type="button"
-                        onClick={() => {
-                          if (
-                            confirm(
-                              `Deseja remover o acesso de "${u.full_name}"?`
-                            )
-                          ) {
-                            deleteAdminUser(u.id);
-                          }
-                        }}
-                        className="p-2 rounded-xl bg-areia hover:bg-red-500/10 border border-borda text-red-700 transition"
-                        title="Remover usuário"
+                        onClick={() => handleEditUser(u)}
+                        className="px-3 py-2 rounded-xl bg-areia hover:bg-borda/50 border border-borda text-xs font-semibold text-musgo flex items-center gap-1.5 transition"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Editar</span>
                       </button>
-                    )}
+
+                      {!u.is_master && u.username !== "conradosmn" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (
+                              confirm(
+                                `Deseja remover o acesso de "${u.full_name}"?`
+                              )
+                            ) {
+                              deleteAdminUser(u.id);
+                            }
+                          }}
+                          className="p-2 rounded-xl bg-areia hover:bg-red-500/10 border border-borda text-red-700 transition"
+                          title="Remover usuário"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
