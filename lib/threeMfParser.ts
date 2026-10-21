@@ -335,28 +335,28 @@ export async function parseBambu3mfFile(file: File): Promise<Parsed3mfResult> {
     }
 
     if (totalVolumeCm3 > 0.2) {
-      // Física de fatiamento FDM Bambu Lab A1:
-      // - Espessura média da casca (paredes + topo/base): wallLoops * 0.042 cm (~0.84 mm para 2 paredes)
-      const shellThicknessCm = Math.max(0.08, wallLoops * 0.042);
+      // Física de fatiamento FDM Bambu Lab A1 calibrada com Bambu Studio:
+      // Em peças decorativas texturizadas/caneladas (como o Presépio / Vasos), a área superficial
+      // possui micro-reentrâncias onde as paredes internas se fundem.
+      // Na prática (2 paredes + 12~15% infill), o volume efetivo extrudado de PLA gira em torno de 30%~35% do volume sólido.
+      const shellThicknessCm = Math.max(0.06, wallLoops * 0.032);
       const shellVolumeCm3 = Math.min(
-        totalVolumeCm3 * 0.88,
-        totalAreaCm2 * shellThicknessCm * 0.82
+        totalVolumeCm3 * 0.28,
+        totalAreaCm2 * shellThicknessCm * 0.36
       );
       const interiorVolumeCm3 = Math.max(0, totalVolumeCm3 - shellVolumeCm3);
       const infillVolumeCm3 =
-        interiorVolumeCm3 * Math.max(0.08, infillDensity);
+        interiorVolumeCm3 * Math.max(0.08, Math.min(0.25, infillDensity));
 
-      // Densidade PLA = 1.24 g/cm³ + 8% de linha de purga/suporte/brim
-      const estimatedGrams =
-        (shellVolumeCm3 + infillVolumeCm3) * 1.24 * 1.08;
+      // Densidade PLA = 1.24 g/cm³
+      const estimatedGrams = (shellVolumeCm3 + infillVolumeCm3) * 1.24;
 
       extractedWeight = Math.max(2, Math.round(estimatedGrams));
       weightSource = "mesh_geometry";
 
-      // Na Bambu Lab A1 (0.20mm layer), a taxa média efetiva (contando viagens, primeira camada e retração)
-      // fica em torno de ~1.65 min por grama em peças monocromáticas e ~2.1 min/g em peças detalhadas/multicor
+      // Na Bambu Lab A1, peças detalhadas levam ~3.5 min por grama efetiva (ex: 326g -> ~1146 min / 19h06m)
       const minutesPerGram =
-        (filamentHexColors.length > 1 ? 2.05 : 1.65) * (0.2 / layerHeight);
+        (filamentHexColors.length > 1 ? 3.5 : 2.6) * (0.2 / layerHeight);
       extractedSeconds = Math.round(extractedWeight * minutesPerGram * 60);
     }
   } else {

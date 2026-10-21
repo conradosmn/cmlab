@@ -129,10 +129,13 @@ export default function AdminCatalogoPage() {
   const [quickResPackQty, setQuickResPackQty] = useState(100);
 
   // Parâmetros de Engenharia de Custos da A1
-  const [powerWatts, setPowerWatts] = useState<number>(120);
+  const [powerWatts, setPowerWatts] = useState<number>(150);
   const [kwhTariff, setKwhTariff] = useState<number>(0.95);
-  const [machineHourCost, setMachineHourCost] = useState<number>(1.5);
+  const [machineHourCost, setMachineHourCost] = useState<number>(0.45); // R$ 3.500 / 8.000h = ~R$ 0,44/h
+  const [manualLaborMinutes, setManualLaborMinutes] = useState<number>(10);
+  const [manualLaborHourlyRate, setManualLaborHourlyRate] = useState<number>(20);
   const [failureMarginPercent, setFailureMarginPercent] = useState<number>(8);
+  const [desiredMarkupPercent, setDesiredMarkupPercent] = useState<number>(120);
   const [mpFeePercent, setMpFeePercent] = useState<number>(3.19);
 
   // Detalhamento linha a linha dos recursos selecionados para exibir na Calculadora de Custos
@@ -171,8 +174,11 @@ export default function AdminCatalogoPage() {
       a1AveragePowerWatts: powerWatts,
       kwhTariffBrl: kwhTariff,
       machineHourCostBrl: machineHourCost,
+      manualLaborMinutes,
+      manualLaborHourlyRateBrl: manualLaborHourlyRate,
       accessories: accInputs,
       failureMarginPercent,
+      desiredMarkupPercent,
       salePriceBrl: salePrice,
       mpFeePercent,
     });
@@ -185,7 +191,10 @@ export default function AdminCatalogoPage() {
     powerWatts,
     kwhTariff,
     machineHourCost,
+    manualLaborMinutes,
+    manualLaborHourlyRate,
     failureMarginPercent,
+    desiredMarkupPercent,
     salePrice,
     mpFeePercent,
   ]);
@@ -727,22 +736,54 @@ export default function AdminCatalogoPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase text-oliva mb-1 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-terracota" />
-                  <span>Tempo (min)</span>
+                <label className="block text-xs font-semibold uppercase text-oliva mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-terracota" />
+                    <span>Tempo (h : min)</span>
+                  </span>
+                  <span className="text-[10px] font-normal text-oliva">
+                    ({printTimeMinutes}m)
+                  </span>
                 </label>
-                <input
-                  type="number"
-                  min={1}
-                  required
-                  value={printTimeMinutes}
-                  onChange={(e) => {
-                    const val = Number(e.target.value);
-                    setPrintTimeMinutes(val);
-                    if (catalogScaleDelta === 0) setBaseTime100(val);
-                  }}
-                  className="w-full px-3 py-2.5 rounded-xl bg-linho border border-borda text-sm font-bold text-musgo"
-                />
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      value={Math.floor(printTimeMinutes / 60)}
+                      onChange={(e) => {
+                        const h = Math.max(0, Number(e.target.value) || 0);
+                        const m = printTimeMinutes % 60;
+                        const total = Math.max(1, h * 60 + m);
+                        setPrintTimeMinutes(total);
+                        if (catalogScaleDelta === 0) setBaseTime100(total);
+                      }}
+                      className="w-full pl-2.5 pr-5 py-2.5 rounded-xl bg-linho border border-borda text-sm font-bold text-musgo"
+                    />
+                    <span className="absolute right-2 top-2.5 text-[11px] text-oliva font-semibold">
+                      h
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      max={59}
+                      value={printTimeMinutes % 60}
+                      onChange={(e) => {
+                        const h = Math.floor(printTimeMinutes / 60);
+                        const m = Math.max(0, Number(e.target.value) || 0);
+                        const total = Math.max(1, h * 60 + m);
+                        setPrintTimeMinutes(total);
+                        if (catalogScaleDelta === 0) setBaseTime100(total);
+                      }}
+                      className="w-full pl-2.5 pr-7 py-2.5 rounded-xl bg-linho border border-borda text-sm font-bold text-musgo"
+                    />
+                    <span className="absolute right-1.5 top-2.5 text-[10px] text-oliva font-semibold">
+                      min
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -1126,15 +1167,15 @@ export default function AdminCatalogoPage() {
                     Engenharia de Custos 3D (Bambu Lab A1)
                   </h2>
                   <p className="text-xs text-oliva">
-                    Filamento + Energia 120W + Hora-Máquina + Recursos (Chaveiro / Silicone)
+                    Filamento + Energia + Máquina + Trabalho Manual + Recursos Extras
                   </p>
                 </div>
               </div>
 
-              {/* Parâmetros Ajustáveis */}
-              <div className="grid grid-cols-2 gap-3 text-xs">
+              {/* Parâmetros Ajustáveis (Máquina, Energia, Mão de Obra e Falha) */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
                 <div className="bg-linho p-2.5 rounded-xl border border-borda">
-                  <label className="text-oliva block">Potência Média A1 (W)</label>
+                  <label className="text-oliva block text-[11px]">Potência A1 (W)</label>
                   <input
                     type="number"
                     value={powerWatts}
@@ -1143,7 +1184,7 @@ export default function AdminCatalogoPage() {
                   />
                 </div>
                 <div className="bg-linho p-2.5 rounded-xl border border-borda">
-                  <label className="text-oliva block">Tarifa Energia (R$/kWh)</label>
+                  <label className="text-oliva block text-[11px]">Energia (R$/kWh)</label>
                   <input
                     type="number"
                     step="0.05"
@@ -1153,17 +1194,56 @@ export default function AdminCatalogoPage() {
                   />
                 </div>
                 <div className="bg-linho p-2.5 rounded-xl border border-borda">
-                  <label className="text-oliva block">Depreciação A1 (R$/h)</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-oliva block text-[11px]">Máquina (R$/h)</label>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMachineHourCost((prev) => (prev < 1 ? 1.5 : 0.44))
+                      }
+                      title="Alternar entre R$ 0,44/h (8.000h) e R$ 1,50/h (2.000h)"
+                      className="text-[10px] text-terracota underline font-semibold"
+                    >
+                      {machineHourCost < 1 ? "8000h" : "2000h"}
+                    </button>
+                  </div>
                   <input
                     type="number"
-                    step="0.10"
+                    step="0.05"
                     value={machineHourCost}
                     onChange={(e) => setMachineHourCost(Number(e.target.value))}
                     className="w-full bg-transparent font-bold text-musgo text-sm mt-0.5 focus:outline-none"
                   />
                 </div>
+
                 <div className="bg-linho p-2.5 rounded-xl border border-borda">
-                  <label className="text-oliva block">Margem Falha (%)</label>
+                  <label className="text-oliva block text-[11px]">
+                    Seu Tempo (min)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={manualLaborMinutes}
+                    onChange={(e) => setManualLaborMinutes(Number(e.target.value))}
+                    className="w-full bg-transparent font-bold text-musgo text-sm mt-0.5 focus:outline-none"
+                  />
+                </div>
+
+                <div className="bg-linho p-2.5 rounded-xl border border-borda">
+                  <label className="text-oliva block text-[11px]">
+                    Sua Hora (R$/h)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={manualLaborHourlyRate}
+                    onChange={(e) => setManualLaborHourlyRate(Number(e.target.value))}
+                    className="w-full bg-transparent font-bold text-musgo text-sm mt-0.5 focus:outline-none"
+                  />
+                </div>
+
+                <div className="bg-linho p-2.5 rounded-xl border border-borda">
+                  <label className="text-oliva block text-[11px]">Risco Falha (%)</label>
                   <input
                     type="number"
                     value={failureMarginPercent}
@@ -1173,11 +1253,11 @@ export default function AdminCatalogoPage() {
                 </div>
               </div>
 
-              {/* Demonstrativo Detalhado da Fórmula */}
+              {/* Demonstrativo Detalhado da Fórmula (Anatomia do Custo) */}
               <div className="bg-linho p-4 rounded-2xl border border-borda space-y-2 text-xs">
                 <div className="flex justify-between">
                   <span className="text-oliva">
-                    1. Custo de Filamento ({weightGrams}g):
+                    1. Filamento ({weightGrams}g):
                   </span>
                   <span className="font-semibold text-musgo">
                     R$ {costBreakdown.filamentCost.toFixed(2).replace(".", ",")}
@@ -1194,7 +1274,8 @@ export default function AdminCatalogoPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-oliva">
-                    3. Depreciação / Manutenção A1:
+                    3. Desgaste / Depreciação Máquina (R${" "}
+                    {machineHourCost.toFixed(2).replace(".", ",")}/h):
                   </span>
                   <span className="font-semibold text-musgo">
                     R${" "}
@@ -1203,11 +1284,20 @@ export default function AdminCatalogoPage() {
                       .replace(".", ",")}
                   </span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-oliva">
+                    4. Seu Trabalho Manual ({manualLaborMinutes} min @ R${" "}
+                    {manualLaborHourlyRate}/h):
+                  </span>
+                  <span className="font-semibold text-musgo">
+                    R$ {costBreakdown.manualLaborCost.toFixed(2).replace(".", ",")}
+                  </span>
+                </div>
 
                 {/* Detalhamento de cada recurso (Chaveiro, Gota de Silicone, etc.) */}
                 <div className="border-t border-borda/60 pt-2 space-y-1">
                   <div className="flex justify-between font-semibold text-musgo">
-                    <span>4. Recursos & Acabamentos da Ficha Técnica:</span>
+                    <span>5. Embalagem & Recursos da Ficha Técnica:</span>
                     <span>
                       R$ {costBreakdown.accessoriesCost.toFixed(2).replace(".", ",")}
                     </span>
@@ -1233,18 +1323,84 @@ export default function AdminCatalogoPage() {
 
                 <div className="flex justify-between border-t border-borda pt-2">
                   <span className="text-oliva">
-                    + Margem de Segurança/Falha ({failureMarginPercent}%):
+                    6. Reserva de Falhas ({failureMarginPercent}%):
                   </span>
                   <span className="font-semibold text-musgo">
                     R$ {costBreakdown.failureBufferCost.toFixed(2).replace(".", ",")}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm font-bold text-musgo border-t border-borda pt-2">
-                  <span>Custo Total de Produção:</span>
+                  <span>Custo Real Unitário:</span>
                   <span>
                     R${" "}
                     {costBreakdown.totalProductionCost.toFixed(2).replace(".", ",")}
                   </span>
+                </div>
+              </div>
+
+              {/* Simulador de Margem sobre o Custo + Preço Sugerido Automático */}
+              <div className="bg-linho p-4 rounded-2xl border border-borda space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-musgo">
+                    Margem de Lucro Sobre o Custo (Markup)
+                  </span>
+                  <span className="text-sm font-bold text-terracota">
+                    {desiredMarkupPercent}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={30}
+                  max={250}
+                  step={5}
+                  value={desiredMarkupPercent}
+                  onChange={(e) => setDesiredMarkupPercent(Number(e.target.value))}
+                  className="w-full accent-terracota cursor-pointer"
+                />
+                <div className="flex flex-wrap gap-1">
+                  {[60, 100, 120, 150, 200].map((mk) => (
+                    <button
+                      key={mk}
+                      type="button"
+                      onClick={() => setDesiredMarkupPercent(mk)}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition ${
+                        desiredMarkupPercent === mk
+                          ? "bg-musgo text-linho border-musgo"
+                          : "bg-areia text-oliva border-borda hover:text-musgo"
+                      }`}
+                    >
+                      {mk}%
+                    </button>
+                  ))}
+                </div>
+
+                <div className="pt-2 border-t border-borda flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-[10px] uppercase font-bold text-oliva">
+                      Preço Sugerido ({desiredMarkupPercent}% lucro + taxa)
+                    </div>
+                    <div className="text-lg font-serif font-bold text-musgo">
+                      R${" "}
+                      {costBreakdown.suggestedSalePriceBrl
+                        .toFixed(2)
+                        .replace(".", ",")}
+                    </div>
+                    <div className="text-[10px] text-oliva">
+                      Só peso + margem: R${" "}
+                      {costBreakdown.onlyFilamentTimes3PriceBrl
+                        .toFixed(2)
+                        .replace(".", ",")}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSalePrice(Math.ceil(costBreakdown.suggestedSalePriceBrl))
+                    }
+                    className="px-3 py-2 rounded-xl bg-musgo hover:bg-musgo/90 text-linho text-xs font-semibold transition shrink-0"
+                  >
+                    Aplicar R$ {Math.ceil(costBreakdown.suggestedSalePriceBrl)}
+                  </button>
                 </div>
               </div>
 
@@ -1256,7 +1412,8 @@ export default function AdminCatalogoPage() {
                       Preço de Venda na Feira (R$)
                     </label>
                     <span className="text-[11px] text-oliva">
-                      Markup atual: {costBreakdown.markupMultiplier}x sobre o custo
+                      Markup efetivo: {costBreakdown.markupMultiplier}x (
+                      {costBreakdown.realMarkupPercent}% s/ custo)
                     </span>
                   </div>
                   <input
@@ -1282,7 +1439,7 @@ export default function AdminCatalogoPage() {
                       R$ {costBreakdown.netProfit.toFixed(2).replace(".", ",")}
                     </span>
                     <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-bold bg-musgo text-linho">
-                      {costBreakdown.profitMarginPercent}% margem
+                      {costBreakdown.profitMarginPercent}% do preço
                     </span>
                   </div>
                 </div>
