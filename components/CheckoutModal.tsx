@@ -11,6 +11,7 @@ import {
 } from "@/lib/types";
 import { useCMLabStore } from "@/lib/store";
 import { generatePixBrCode } from "@/lib/pixGenerator";
+import { calculateScaled3DMetrics } from "@/lib/threeMfParser";
 import {
   X,
   QrCode,
@@ -24,6 +25,9 @@ import {
   AlertCircle,
   Copy,
   Check,
+  Maximize2,
+  Lock,
+  Unlock,
 } from "lucide-react";
 
 interface CheckoutModalProps {
@@ -70,6 +74,13 @@ export function CheckoutModal({
   const [copiedPix, setCopiedPix] = useState(false);
   const [pixQrDataUrl, setPixQrDataUrl] = useState<string>("");
 
+  // Opção de Escala / Tamanho Sob Medida no Ato da Venda (Desabilitada por padrão!)
+  const [customScaleEnabled, setCustomScaleEnabled] = useState(false);
+  const [scaleDeltaPercent, setScaleDeltaPercent] = useState<number>(20); // Ex: +20% quando habilitado
+  const [overrideWeightGrams, setOverrideWeightGrams] = useState<number>(0);
+  const [overridePrintTimeMinutes, setOverridePrintTimeMinutes] = useState<number>(0);
+  const [overridePriceBrl, setOverridePriceBrl] = useState<number>(0);
+
   const allowedFilaments = useMemo(() => {
     if (!product) return [];
     const allowed = filaments.filter(
@@ -82,6 +93,11 @@ export function CheckoutModal({
     if (isOpen && product) {
       setStep("details");
       setActiveOrderId(null);
+      setCustomScaleEnabled(false);
+      setScaleDeltaPercent(0);
+      setOverrideWeightGrams(product.weight_grams);
+      setOverridePrintTimeMinutes(product.print_time_minutes);
+      setOverridePriceBrl(product.price);
       if (!preconfiguredKeychain && allowedFilaments.length > 0) {
         const count = Math.min(product.max_colors || 1, 2);
         setSelectedFilamentIds(
@@ -92,6 +108,20 @@ export function CheckoutModal({
       }
     }
   }, [isOpen, product, preconfiguredKeychain, allowedFilaments]);
+
+  const applyScalePreset = (deltaPercent: number) => {
+    if (!product) return;
+    setScaleDeltaPercent(deltaPercent);
+    const metrics = calculateScaled3DMetrics({
+      baseWeightGrams: product.weight_grams,
+      basePrintTimeMinutes: product.print_time_minutes,
+      basePriceBrl: product.price,
+      scaleDeltaPercent: deltaPercent,
+    });
+    setOverrideWeightGrams(metrics.scaledWeightGrams);
+    setOverridePrintTimeMinutes(metrics.scaledPrintTimeMinutes);
+    setOverridePriceBrl(metrics.scaledPriceBrl);
+  };
 
   // Monitora em tempo real se o pedido 'awaiting_tap_to_pay' ou 'pending' foi confirmado no celular (/admin/caixa)
   const currentOrderInStore = useMemo(
@@ -111,13 +141,31 @@ export function CheckoutModal({
 
   if (!isOpen || !product) return null;
 
-  // Monta as cores escolhidas (se veio do Simulador de Chaveiro ou da seleção do Produto)
+  const totalPrice = preconfiguredKeychain
+    ? preconfiguredKeychain.totalPrice
+    : customScaleEnabled
+    ? Math.max(1, overridePriceBrl)
+    : product.price;
+
+  const weightGrams = preconfiguredKeychain
+    ? preconfiguredKeychain.weightGrams
+    : customScaleEnabled
+    ? Math.max(1, overrideWeightGrams)
+    : product.weight_grams;
+
+  const printTimeMinutes = preconfiguredKeychain
+    ? preconfiguredKeychain.printTimeMinutes
+    : customScaleEnabled
+    ? Math.max(1, overridePrintTimeMinutes)
+    : product.print_time_minutes;
+
+  // Monta as cores escolhidas (se veio do Simulador de Chaveiro ou da seleção do Produto, já usando o peso real escalado!)
   const resolvedColors: SelectedColorChoice[] = preconfiguredKeychain
     ? preconfiguredKeychain.selectedColors
     : selectedFilamentIds.map((fid, idx) => {
         const fil = allowedFilaments.find((f) => f.id === fid) || allowedFilaments[0];
         const splitWeight = Math.ceil(
-          product.weight_grams / Math.max(1, selectedFilamentIds.length)
+          weightGrams / Math.max(1, selectedFilamentIds.length)
         );
         return {
           slot_label:
@@ -128,16 +176,6 @@ export function CheckoutModal({
           weight_grams: splitWeight,
         };
       });
-
-  const totalPrice = preconfiguredKeychain
-    ? preconfiguredKeychain.totalPrice
-    : product.price;
-  const weightGrams = preconfiguredKeychain
-    ? preconfiguredKeychain.weightGrams
-    : product.weight_grams;
-  const printTimeMinutes = preconfiguredKeychain
-    ? preconfiguredKeychain.printTimeMinutes
-    : product.print_time_minutes;
 
   const chosenFilamentObjects = resolvedColors
     .map((rc) => filaments.find((f) => f.id === rc.filament_id))
@@ -165,13 +203,18 @@ export function CheckoutModal({
       return;
     }
 
+    const scaleSuffix =
+      !preconfiguredKeychain && customScaleEnabled
+        ? ` [Escala ${scaleDeltaPercent >= 0 ? `+${scaleDeltaPercent}%` : `${scaleDeltaPercent}%`} • ${weightGrams}g]`
+        : "";
+
     const titleSnapshot = preconfiguredKeychain
       ? `Chaveiro Personalizado: '${preconfiguredKeychain.customKeychainData.text}'${
           preconfiguredKeychain.customKeychainData.charm !== "none"
             ? ` + Pingente`
             : ""
         }`
-      : product.name;
+      : `${product.name}${scaleSuffix}`;
 
     const initialPaymentStatus =
       paymentMethod === "pix" ? "pending" : "awaiting_tap_to_pay";
@@ -267,6 +310,11 @@ export function CheckoutModal({
                   {preconfiguredKeychain
                     ? `Chaveiro "${preconfiguredKeychain.customKeychainData.text}"`
                     : product.name}
+                  {!preconfiguredKeychain && customScaleEnabled && (
+                    <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-sans font-bold bg-terracota text-white">
+                      Escala {scaleDeltaPercent >= 0 ? `+${scaleDeltaPercent}%` : `${scaleDeltaPercent}%`} ({weightGrams}g)
+                    </span>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
                   {resolvedColors.map((rc, i) => (
@@ -278,7 +326,7 @@ export function CheckoutModal({
                         className="w-3 h-3 rounded-full border border-musgo/30"
                         style={{ backgroundColor: rc.hex_code }}
                       />
-                      {rc.slot_label}: {rc.color_name}
+                      {rc.slot_label}: {rc.color_name} ({rc.weight_grams}g)
                     </span>
                   ))}
                 </div>
@@ -287,6 +335,9 @@ export function CheckoutModal({
                 <div className="text-xs text-oliva">Total</div>
                 <div className="text-2xl font-serif font-bold text-terracota">
                   R$ {totalPrice.toFixed(2).replace(".", ",")}
+                </div>
+                <div className="text-[11px] text-oliva">
+                  {weightGrams}g • {printTimeMinutes} min A1
                 </div>
               </div>
             </div>
@@ -333,6 +384,198 @@ export function CheckoutModal({
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* OPÇÃO DE ESCALA / TAMANHO SOB MEDIDA NO ATO DA VENDA (Desabilitada por padrão!) */}
+            {!preconfiguredKeychain && (
+              <div
+                className={`rounded-2xl border transition p-3.5 ${
+                  customScaleEnabled
+                    ? "bg-areia border-terracota shadow-sm space-y-3"
+                    : "bg-areia/40 border-borda/80"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Maximize2
+                      className={`w-4 h-4 ${
+                        customScaleEnabled ? "text-terracota" : "text-oliva"
+                      }`}
+                    />
+                    <div>
+                      <div className="text-xs font-bold text-musgo flex items-center gap-1.5">
+                        <span>Escala / Tamanho Sob Medida (Ex: +20%)</span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            customScaleEnabled
+                              ? "bg-terracota text-white"
+                              : "bg-borda/60 text-oliva"
+                          }`}
+                        >
+                          {customScaleEnabled ? "Habilitado" : "Padrão 100% (Bloqueado)"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-oliva">
+                        Habilite se o cliente pedir a peça ampliada ou reduzida (recalcula filamento g, tempo A1 e valor).
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!customScaleEnabled) {
+                        setCustomScaleEnabled(true);
+                        applyScalePreset(20); // Já abre sugerindo +20% (ou permite escolher)
+                      } else {
+                        setCustomScaleEnabled(false);
+                        setScaleDeltaPercent(0);
+                        setOverrideWeightGrams(product.weight_grams);
+                        setOverridePrintTimeMinutes(product.print_time_minutes);
+                        setOverridePriceBrl(product.price);
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 shrink-0 transition ${
+                      customScaleEnabled
+                        ? "bg-musgo text-linho border-musgo"
+                        : "bg-linho text-oliva border-borda hover:text-musgo hover:border-argila"
+                    }`}
+                  >
+                    {customScaleEnabled ? (
+                      <>
+                        <Unlock className="w-3.5 h-3.5" />
+                        <span>Voltar p/ Padrão</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>Habilitar Escala</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {customScaleEnabled && (
+                  <div className="pt-2 border-t border-borda space-y-3">
+                    {/* Botões rápidos de porcentagem de escala */}
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase text-oliva mb-1.5">
+                        Escolha a Variação de Escala 3D (Física FDM Bambu Studio)
+                      </label>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {[-20, -10, 0, 10, 15, 20, 30, 50].map((delta) => {
+                          const active = scaleDeltaPercent === delta;
+                          return (
+                            <button
+                              key={delta}
+                              type="button"
+                              onClick={() => applyScalePreset(delta)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+                                active
+                                  ? "bg-terracota text-white border-terracota shadow-sm"
+                                  : "bg-linho text-musgo border-borda hover:border-argila"
+                              }`}
+                            >
+                              {delta === 0
+                                ? "Padrão (0%)"
+                                : delta > 0
+                                ? `+${delta}% (${100 + delta}%)`
+                                : `${delta}% (${100 + delta}%)`}
+                            </button>
+                          );
+                        })}
+
+                        <div className="flex items-center gap-1 ml-auto">
+                          <span className="text-[11px] text-oliva font-semibold">
+                            Outro %:
+                          </span>
+                          <input
+                            type="number"
+                            value={scaleDeltaPercent}
+                            onChange={(e) =>
+                              applyScalePreset(Number(e.target.value) || 0)
+                            }
+                            className="w-16 px-2 py-1 rounded-lg bg-linho border border-borda text-xs font-bold text-musgo text-center"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Campos destravados para ajuste fino (caso já tenha fatiado no Bambu Studio, ex: Presépio +20% = >400g) */}
+                    <div className="grid grid-cols-3 gap-2.5 bg-linho p-3 rounded-xl border border-borda">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-oliva mb-1">
+                          Peso Escalado (g)
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={overrideWeightGrams}
+                          onChange={(e) => {
+                            const newW = Math.max(1, Number(e.target.value) || 1);
+                            setOverrideWeightGrams(newW);
+                            // Atualiza tempo e preço proporcionalmente se digitar as gramas reais do Bambu Studio (ex: 410g)
+                            if (product.weight_grams > 0) {
+                              const ratio = newW / product.weight_grams;
+                              setOverridePrintTimeMinutes(
+                                Math.max(1, Math.round(product.print_time_minutes * Math.pow(ratio, 0.9)))
+                              );
+                              setOverridePriceBrl(
+                                Math.ceil(product.price * Math.pow(ratio, 0.88))
+                              );
+                            }
+                          }}
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-areia border border-borda text-sm font-bold text-musgo"
+                        />
+                        <div className="text-[10px] text-oliva mt-0.5">
+                          Base: {product.weight_grams}g
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-oliva mb-1">
+                          Tempo A1 (min)
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={overridePrintTimeMinutes}
+                          onChange={(e) =>
+                            setOverridePrintTimeMinutes(
+                              Math.max(1, Number(e.target.value) || 1)
+                            )
+                          }
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-areia border border-borda text-sm font-bold text-musgo"
+                        />
+                        <div className="text-[10px] text-oliva mt-0.5">
+                          Base: {product.print_time_minutes} min
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-terracota mb-1">
+                          Valor Final (R$)
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          step="0.50"
+                          value={overridePriceBrl}
+                          onChange={(e) =>
+                            setOverridePriceBrl(
+                              Math.max(1, Number(e.target.value) || 1)
+                            )
+                          }
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-areia border border-terracota text-sm font-bold text-terracota"
+                        />
+                        <div className="text-[10px] text-oliva mt-0.5">
+                          Base: R$ {product.price.toFixed(2).replace(".", ",")}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

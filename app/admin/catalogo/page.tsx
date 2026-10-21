@@ -1,12 +1,15 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import JSZip from "jszip";
 import Link from "next/link";
 import { AdminNav } from "@/components/AdminNav";
 import { useCMLabStore } from "@/lib/store";
 import { calculate3DCosts } from "@/lib/costCalculator";
 import { compressImageBlobToDataUrl } from "@/lib/imageUtils";
+import {
+  parseBambu3mfFile,
+  calculateScaled3DMetrics,
+} from "@/lib/threeMfParser";
 import {
   Accessory,
   Filament,
@@ -31,6 +34,7 @@ import {
   ImagePlus,
   Star,
   ClipboardPaste,
+  Maximize2,
 } from "lucide-react";
 
 const DEMO_MAKERWORLD_PRESETS = [
@@ -102,6 +106,9 @@ export default function AdminCatalogoPage() {
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [printTimeMinutes, setPrintTimeMinutes] = useState<number>(210);
   const [weightGrams, setWeightGrams] = useState<number>(130);
+  const [baseWeight100, setBaseWeight100] = useState<number>(130);
+  const [baseTime100, setBaseTime100] = useState<number>(210);
+  const [catalogScaleDelta, setCatalogScaleDelta] = useState<number>(0);
   const [maxColors, setMaxColors] = useState<number>(1);
   const [allowedFilamentIds, setAllowedFilamentIds] = useState<string[]>(() =>
     filaments.slice(0, 4).map((f) => f.id)
@@ -346,6 +353,20 @@ export default function AdminCatalogoPage() {
     setProductImages((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const handleApplyCatalogScale = (deltaPercent: number) => {
+    setCatalogScaleDelta(deltaPercent);
+    const baseW = baseWeight100 > 0 ? baseWeight100 : weightGrams;
+    const baseT = baseTime100 > 0 ? baseTime100 : printTimeMinutes;
+    const scaled = calculateScaled3DMetrics({
+      baseWeightGrams: baseW,
+      basePrintTimeMinutes: baseT,
+      basePriceBrl: salePrice,
+      scaleDeltaPercent: deltaPercent,
+    });
+    setWeightGrams(scaled.scaledWeightGrams);
+    setPrintTimeMinutes(scaled.scaledPrintTimeMinutes);
+  };
+
   const handleUpload3mfFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -353,128 +374,61 @@ export default function AdminCatalogoPage() {
     setImportMessage(null);
 
     try {
-      const zip = await JSZip.loadAsync(file);
-      const cleanTitle = file.name.replace(/\.3mf$/i, "").replace(/[-_]/g, " ");
-      setName(cleanTitle);
+      const parsed = await parseBambu3mfFile(file);
+      setName(parsed.title);
+      setCatalogScaleDelta(0);
 
-      let extractedWeight = 0;
-      let extractedMinutes = 0;
-
-      const sliceInfoFile =
-        zip.file("Metadata/slice_info.config") ||
-        zip.file("Metadata/model_settings.config");
-
-      if (sliceInfoFile) {
-        const xmlText = await sliceInfoFile.async("string");
-        const weightMatch =
-          xmlText.match(/weight"\s+value="([\d.]+)"/i) ||
-          xmlText.match(/used_g="([\d.]+)"/i);
-        const timeMatch =
-          xmlText.match(/prediction"\s+value="([\d.]+)"/i) ||
-          xmlText.match(/print_time="([\d.]+)"/i);
-
-        if (weightMatch?.[1]) extractedWeight = Math.ceil(parseFloat(weightMatch[1]));
-        if (timeMatch?.[1]) extractedMinutes = Math.ceil(parseFloat(timeMatch[1]) / 60);
+      if (parsed.photos.length > 0) {
+        setProductImages(parsed.photos);
       }
 
-      // Varre o arquivo .3mf em busca de TODAS as fotos reais do MakerWorld (Auxiliaries/Model Pictures/*)
-      // e também das miniaturas de fatiamento (Metadata/plate_1.png, Metadata/top_1.png)
-      const extractedPhotos: string[] = [];
-      const zipEntries = Object.keys(zip.files);
+      if (parsed.weightGrams > 0) {
+        setWeightGrams(parsed.weightGrams);
+        setBaseWeight100(parsed.weightGrams);
+      }
+      if (parsed.printTimeMinutes > 0) {
+        setPrintTimeMinutes(parsed.printTimeMinutes);
+        setBaseTime100(parsed.printTimeMinutes);
+      }
 
-      // 1. Prioriza fotos reais em Auxiliaries/Model Pictures ou Auxiliaries/
-      const auxiliaryImages = zipEntries.filter(
-        (p) =>
-          !zip.files[p].dir &&
-          /\.(png|jpe?g|webp)$/i.test(p) &&
-          (p.toLowerCase().includes("auxiliaries") ||
-            p.toLowerCase().includes("pictures") ||
-            p.toLowerCase().includes("cover"))
-      );
-
-      // 2. Miniaturas da placa fatiada no Bambu Studio (plate_1.png, top_1.png, thumbnail.png)
-      const plateImages = zipEntries.filter(
-        (p) =>
-          !zip.files[p].dir &&
-          /\.(png|jpe?g|webp)$/i.test(p) &&
-          (p.toLowerCase().includes("plate_") ||
-            p.toLowerCase().includes("top_") ||
-            p.toLowerCase().includes("thumbnail")) &&
-          !p.toLowerCase().includes("small") &&
-          !p.toLowerCase().includes("no_light")
-      );
-
-      const candidatePaths = [...auxiliaryImages, ...plateImages].slice(0, 6);
-
-      for (const imgPath of candidatePaths) {
-        const entry = zip.file(imgPath);
-        if (entry) {
-          const blob = await entry.async("blob");
-          const optimizedDataUrl = await compressImageBlobToDataUrl(
-            blob,
-            1000,
-            0.84,
-            imgPath
+      if (parsed.filamentHexColors.length > 0) {
+        setMaxColors(parsed.maxColors);
+        const matchedFilIds: string[] = [];
+        for (let i = 0; i < Math.min(4, parsed.filamentHexColors.length); i++) {
+          const hex = parsed.filamentHexColors[i];
+          if (!hex) continue;
+          const existing = filaments.find(
+            (f) => f.hex_code.toLowerCase() === hex.toLowerCase()
           );
-          extractedPhotos.push(optimizedDataUrl);
-        }
-      }
-
-      // 3. Tenta extrair o título oficial do modelo dentro de 3D/3dmodel.model (metadado MakerWorld)
-      const modelXmlFile = zip.file("3D/3dmodel.model");
-      if (modelXmlFile) {
-        const modelXml = await modelXmlFile.async("string");
-        const titleMeta = modelXml.match(
-          /<metadata\s+name="Title"[^>]*>([\s\S]*?)<\/metadata>/i
-        );
-        if (titleMeta?.[1]?.trim()) {
-          setName(titleMeta[1].trim());
-        }
-      }
-
-      // 4. Extrai as cores de filamento do perfil Bambu Studio (Metadata/project_settings.config)
-      const projSettingsFile = zip.file("Metadata/project_settings.config");
-      if (projSettingsFile) {
-        try {
-          const projJson = JSON.parse(await projSettingsFile.async("string"));
-          const colors: string[] = projJson?.filament_colour || [];
-          const types: string[] = projJson?.filament_type || [];
-          if (Array.isArray(colors) && colors.length > 0) {
-            setMaxColors(Math.min(4, colors.length));
-            const matchedFilIds: string[] = [];
-            for (let i = 0; i < Math.min(4, colors.length); i++) {
-              const hex = colors[i];
-              const mat = types[i] || "PLA";
-              if (!hex) continue;
-              const existing = filaments.find(
-                (f) => f.hex_code.toLowerCase() === hex.toLowerCase()
-              );
-              if (existing) {
-                matchedFilIds.push(existing.id);
-              }
-            }
-            if (matchedFilIds.length > 0) {
-              setAllowedFilamentIds(matchedFilIds);
-            }
+          if (existing) {
+            matchedFilIds.push(existing.id);
           }
-        } catch {
-          // Ignora se não for JSON válido
+        }
+        if (matchedFilIds.length > 0) {
+          setAllowedFilamentIds(matchedFilIds);
         }
       }
 
-      if (extractedPhotos.length > 0) {
-        setProductImages(extractedPhotos);
+      // Sugere um preço comercial justo automático caso tenha extraído peso e tempo
+      if (parsed.weightGrams > 0 && parsed.printTimeMinutes > 0) {
+        const autoSuggestedPrice =
+          Math.ceil((parsed.weightGrams * 0.34 + parsed.printTimeMinutes * 0.11) / 5) * 5;
+        setSalePrice(Math.max(25, autoSuggestedPrice));
       }
 
-      if (extractedWeight > 0) setWeightGrams(extractedWeight);
-      if (extractedMinutes > 0) setPrintTimeMinutes(extractedMinutes);
+      const sourceLabel =
+        parsed.weightSource === "slice_info"
+          ? `fatiamento Bambu Studio (${parsed.plateCount || 1} placa(s))`
+          : parsed.weightSource === "mesh_geometry"
+          ? "geometria 3D da malha do modelo (arquivo .3mf não fatiado)"
+          : "arquivo .3mf";
 
       setImportMessage({
         type: "success",
         text:
-          extractedWeight > 0
-            ? `Arquivo .3MF lido com sucesso! Peso A1: ${extractedWeight}g • Tempo: ${extractedMinutes} min • ${extractedPhotos.length} foto(s) extraída(s) automaticamente!`
-            : `Arquivo "${file.name}" carregado com ${extractedPhotos.length} foto(s) extraída(s)! Confirme o peso e tempo abaixo.`,
+          parsed.weightGrams > 0
+            ? `✅ .3MF "${parsed.title}" importado via ${sourceLabel}: Peso ${parsed.weightGrams}g • Tempo ${parsed.printTimeMinutes} min • ${parsed.photos.length} foto(s) única(s)! Se você escalou a peça (ex: +20%), clique na barra de escala abaixo.`
+            : `Arquivo "${file.name}" carregado com ${parsed.photos.length} foto(s) extraída(s)! Confirme o peso e tempo abaixo.`,
       });
     } catch {
       setImportMessage({
@@ -492,6 +446,9 @@ export default function AdminCatalogoPage() {
     setCategory(preset.category);
     setWeightGrams(preset.weight_grams);
     setPrintTimeMinutes(preset.print_time_minutes);
+    setBaseWeight100(preset.weight_grams);
+    setBaseTime100(preset.print_time_minutes);
+    setCatalogScaleDelta(0);
     setProductImages([preset.image]);
     setSelectedAccessories(preset.defaultAccessories);
     const suggestedPrice =
@@ -554,6 +511,9 @@ export default function AdminCatalogoPage() {
     setProductImages(p.images && p.images.length > 0 ? p.images : []);
     setPrintTimeMinutes(p.print_time_minutes);
     setWeightGrams(p.weight_grams);
+    setBaseWeight100(p.weight_grams);
+    setBaseTime100(p.print_time_minutes);
+    setCatalogScaleDelta(0);
     setMaxColors(p.max_colors || 1);
     setAllowedFilamentIds(p.allowed_filament_ids || []);
     setSelectedAccessories(p.accessories || []);
@@ -757,7 +717,11 @@ export default function AdminCatalogoPage() {
                   min={1}
                   required
                   value={weightGrams}
-                  onChange={(e) => setWeightGrams(Number(e.target.value))}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setWeightGrams(val);
+                    if (catalogScaleDelta === 0) setBaseWeight100(val);
+                  }}
                   className="w-full px-3 py-2.5 rounded-xl bg-linho border border-borda text-sm font-bold text-musgo"
                 />
               </div>
@@ -772,7 +736,11 @@ export default function AdminCatalogoPage() {
                   min={1}
                   required
                   value={printTimeMinutes}
-                  onChange={(e) => setPrintTimeMinutes(Number(e.target.value))}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setPrintTimeMinutes(val);
+                    if (catalogScaleDelta === 0) setBaseTime100(val);
+                  }}
                   className="w-full px-3 py-2.5 rounded-xl bg-linho border border-borda text-sm font-bold text-musgo"
                 />
               </div>
@@ -802,6 +770,40 @@ export default function AdminCatalogoPage() {
                   onChange={(e) => setReadyStockQty(Number(e.target.value))}
                   className="w-full px-3 py-2.5 rounded-xl bg-linho border border-borda text-sm font-bold text-musgo"
                 />
+              </div>
+            </div>
+
+            {/* SIMULADOR RÁPIDO DE ESCALA 3D NO CATÁLOGO (Ex: Presépio escalado +20%) */}
+            <div className="bg-linho px-3.5 py-2.5 rounded-2xl border border-borda flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-musgo">
+                <Maximize2 className="w-3.5 h-3.5 text-terracota shrink-0" />
+                <span className="font-bold">Escala da Peça no Bambu Studio:</span>
+                <span className="text-[11px] text-oliva">
+                  (Base 100%: {baseWeight100}g • {baseTime100} min)
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                {[-15, 0, 10, 20, 30, 50].map((delta) => {
+                  const active = catalogScaleDelta === delta;
+                  return (
+                    <button
+                      key={delta}
+                      type="button"
+                      onClick={() => handleApplyCatalogScale(delta)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
+                        active
+                          ? "bg-terracota text-white border-terracota shadow-sm"
+                          : "bg-areia text-musgo border-borda hover:border-argila"
+                      }`}
+                    >
+                      {delta === 0
+                        ? "100% (Padrão)"
+                        : delta > 0
+                        ? `+${delta}% (${100 + delta}%)`
+                        : `${delta}% (${100 + delta}%)`}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
