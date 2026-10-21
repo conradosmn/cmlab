@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AdminNav } from "@/components/AdminNav";
 import { useCMLabStore } from "@/lib/store";
 import { calculate3DCosts } from "@/lib/costCalculator";
+import { compressImageBlobToDataUrl } from "@/lib/imageUtils";
 import {
   Accessory,
   Filament,
@@ -27,6 +28,9 @@ import {
   AlertCircle,
   Wrench,
   Minus,
+  ImagePlus,
+  Star,
+  ClipboardPaste,
 } from "lucide-react";
 
 const DEMO_MAKERWORLD_PRESETS = [
@@ -91,9 +95,11 @@ export default function AdminCatalogoPage() {
   const [description, setDescription] = useState(
     "Peça produzida em impressão 3D de alta precisão na Bambu Lab A1 com acabamento orgânico fosco."
   );
-  const [imageUrl, setImageUrl] = useState(
-    "https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?auto=format&fit=crop&w=900&q=80"
-  );
+  const [productImages, setProductImages] = useState<string[]>([
+    "https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?auto=format&fit=crop&w=900&q=80",
+  ]);
+  const [externalImageUrlInput, setExternalImageUrlInput] = useState("");
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [printTimeMinutes, setPrintTimeMinutes] = useState<number>(210);
   const [weightGrams, setWeightGrams] = useState<number>(130);
   const [maxColors, setMaxColors] = useState<number>(1);
@@ -226,7 +232,9 @@ export default function AdminCatalogoPage() {
       }
 
       setName(data.title || "Modelo MakerWorld A1");
-      if (data.images?.[0]) setImageUrl(data.images[0]);
+      if (Array.isArray(data.images) && data.images.length > 0) {
+        setProductImages(data.images);
+      }
       if (data.weight_grams) setWeightGrams(data.weight_grams);
       if (data.print_time_minutes) setPrintTimeMinutes(data.print_time_minutes);
 
@@ -280,6 +288,64 @@ export default function AdminCatalogoPage() {
     }
   };
 
+  // Upload de 1 ou várias fotos do Computador / Celular
+  const handleUploadPhotoFiles = async (files: FileList | File[]) => {
+    const fileArr = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (fileArr.length === 0) return;
+    setUploadingPhotos(true);
+    try {
+      const compressedList: string[] = [];
+      for (const file of fileArr) {
+        const dataUrl = await compressImageBlobToDataUrl(file, 1000, 0.84);
+        compressedList.push(dataUrl);
+      }
+      setProductImages((prev) => {
+        // Se só tinha a foto default do Unsplash e subiu foto real, coloca as novas na frente!
+        const withoutDefault =
+          prev.length === 1 && prev[0].includes("images.unsplash.com") ? [] : prev;
+        return [...compressedList, ...withoutDefault];
+      });
+    } catch (err) {
+      console.error("Erro ao processar fotos:", err);
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
+
+  // Colar imagem direto da área de transferência (Ctrl+V)
+  const handlePasteImage = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageFiles: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/")) {
+        const blob = items[i].getAsFile();
+        if (blob) imageFiles.push(blob);
+      }
+    }
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      await handleUploadPhotoFiles(imageFiles);
+      setImportMessage({
+        type: "success",
+        text: "📸 Foto colada da área de transferência e adicionada à galeria da peça!",
+      });
+    }
+  };
+
+  const handleSetCoverImage = (idx: number) => {
+    setProductImages((prev) => {
+      if (idx <= 0 || idx >= prev.length) return prev;
+      const chosen = prev[idx];
+      const rest = prev.filter((_, i) => i !== idx);
+      return [chosen, ...rest];
+    });
+  };
+
+  const handleRemoveImage = (idx: number) => {
+    setProductImages((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const handleUpload3mfFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -311,17 +377,46 @@ export default function AdminCatalogoPage() {
         if (timeMatch?.[1]) extractedMinutes = Math.ceil(parseFloat(timeMatch[1]) / 60);
       }
 
-      // Extrai automaticamente a miniatura renderizada da mesa dentro do .3mf do Bambu Studio!
-      const thumbFile =
-        zip.file("Metadata/plate_1.png") ||
-        zip.file("Metadata/top_1.png") ||
-        zip.file("Metadata/thumbnail.png");
+      // Varre o arquivo .3mf em busca de TODAS as fotos reais do MakerWorld (Auxiliaries/Model Pictures/*)
+      // e também das miniaturas de fatiamento (Metadata/plate_1.png, Metadata/top_1.png)
+      const extractedPhotos: string[] = [];
+      const zipEntries = Object.keys(zip.files);
 
-      if (thumbFile) {
-        const base64Img = await thumbFile.async("base64");
-        if (base64Img) {
-          setImageUrl(`data:image/png;base64,${base64Img}`);
+      // 1. Prioriza fotos reais em Auxiliaries/Model Pictures ou Auxiliaries/
+      const auxiliaryImages = zipEntries.filter(
+        (p) =>
+          !zip.files[p].dir &&
+          /\.(png|jpe?g|webp)$/i.test(p) &&
+          (p.toLowerCase().includes("auxiliaries") ||
+            p.toLowerCase().includes("pictures") ||
+            p.toLowerCase().includes("cover"))
+      );
+
+      // 2. Miniaturas da placa fatiada no Bambu Studio (plate_1.png, top_1.png, thumbnail.png)
+      const plateImages = zipEntries.filter(
+        (p) =>
+          !zip.files[p].dir &&
+          /\.(png|jpe?g|webp)$/i.test(p) &&
+          (p.toLowerCase().includes("plate_") ||
+            p.toLowerCase().includes("top_") ||
+            p.toLowerCase().includes("thumbnail")) &&
+          !p.toLowerCase().includes("small") &&
+          !p.toLowerCase().includes("no_light")
+      );
+
+      const candidatePaths = [...auxiliaryImages, ...plateImages].slice(0, 6);
+
+      for (const imgPath of candidatePaths) {
+        const entry = zip.file(imgPath);
+        if (entry) {
+          const blob = await entry.async("blob");
+          const optimizedDataUrl = await compressImageBlobToDataUrl(blob, 1000, 0.84);
+          extractedPhotos.push(optimizedDataUrl);
         }
+      }
+
+      if (extractedPhotos.length > 0) {
+        setProductImages(extractedPhotos);
       }
 
       if (extractedWeight > 0) setWeightGrams(extractedWeight);
@@ -331,17 +426,13 @@ export default function AdminCatalogoPage() {
         type: "success",
         text:
           extractedWeight > 0
-            ? `Arquivo .3MF Bambu Studio lido com sucesso! Peso A1: ${extractedWeight}g • Tempo: ${extractedMinutes} min${
-                thumbFile ? " • Foto da peça extraída!" : "."
-              }`
-            : `Arquivo "${file.name}" carregado${
-                thumbFile ? " com miniatura 3D extraída" : ""
-              }! Confirme os gramas e minutos abaixo (dica: salve o .3mf após clicar em 'Slice Plate' no Bambu Studio para puxar peso e tempo exatos).`,
+            ? `Arquivo .3MF lido com sucesso! Peso A1: ${extractedWeight}g • Tempo: ${extractedMinutes} min • ${extractedPhotos.length} foto(s) extraída(s) automaticamente!`
+            : `Arquivo "${file.name}" carregado com ${extractedPhotos.length} foto(s) extraída(s)! Confirme o peso e tempo abaixo.`,
       });
     } catch {
       setImportMessage({
         type: "error",
-        text: "Não foi possível descompactar o arquivo .3mf. Verifique se é um .3mf válido do Bambu Studio.",
+        text: "Não foi possível descompactar o arquivo .3mf. Verifique se é um .3mf válido do Bambu Studio / MakerWorld.",
       });
     } finally {
       setImportLoading(false);
@@ -354,26 +445,33 @@ export default function AdminCatalogoPage() {
     setCategory(preset.category);
     setWeightGrams(preset.weight_grams);
     setPrintTimeMinutes(preset.print_time_minutes);
-    setImageUrl(preset.image);
+    setProductImages([preset.image]);
     setSelectedAccessories(preset.defaultAccessories);
     const suggestedPrice =
       Math.ceil((preset.weight_grams * 0.35 + preset.print_time_minutes * 0.12) / 5) * 5;
     setSalePrice(Math.max(20, suggestedPrice));
     setImportMessage({
       type: "info",
-      text: `Preset Bambu Lab A1 carregado: "${preset.title}" com recursos (chaveiro/gotas de silicone) pré-selecionados!`,
+      text: `Preset Bambu Lab A1 carregado: "${preset.title}" com recursos pré-selecionados!`,
     });
   };
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    const validImages =
+      productImages.filter((img) => img && img.trim().length > 0).length > 0
+        ? productImages.filter((img) => img && img.trim().length > 0)
+        : [
+            "https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?auto=format&fit=crop&w=900&q=80",
+          ];
+
     const productPayload: Product = {
       id: editingId || `prod-${Date.now()}`,
       name: name.trim(),
       category,
       description: description.trim(),
       makerworld_url: makerworldUrl.trim() || undefined,
-      images: [imageUrl.trim()],
+      images: validImages,
       print_time_minutes: Number(printTimeMinutes),
       weight_grams: Number(weightGrams),
       max_colors: Number(maxColors),
@@ -394,7 +492,7 @@ export default function AdminCatalogoPage() {
     setEditingId(null);
     setImportMessage({
       type: "success",
-      text: `Produto "${productPayload.name}" salvo com custo calculado de R$ ${costBreakdown.totalProductionCost
+      text: `Produto "${productPayload.name}" salvo com ${validImages.length} foto(s) e custo calculado de R$ ${costBreakdown.totalProductionCost
         .toFixed(2)
         .replace(".", ",")}!`,
     });
@@ -406,7 +504,7 @@ export default function AdminCatalogoPage() {
     setCategory(p.category);
     setDescription(p.description || "");
     setMakerworldUrl(p.makerworld_url || "");
-    setImageUrl(p.images?.[0] || "");
+    setProductImages(p.images && p.images.length > 0 ? p.images : []);
     setPrintTimeMinutes(p.print_time_minutes);
     setWeightGrams(p.weight_grams);
     setMaxColors(p.max_colors || 1);
@@ -657,6 +755,125 @@ export default function AdminCatalogoPage() {
                   onChange={(e) => setReadyStockQty(Number(e.target.value))}
                   className="w-full px-3 py-2.5 rounded-xl bg-linho border border-borda text-sm font-bold text-musgo"
                 />
+              </div>
+            </div>
+
+            {/* GALERIA FUNCIONAL DE FOTOS DA PEÇA (Upload do PC/Celular + Ctrl+V + .3MF + Link) */}
+            <div
+              onPaste={handlePasteImage}
+              className="bg-linho p-4 rounded-2xl border-2 border-dashed border-argila/70 space-y-3 focus-within:border-terracota transition"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <label className="text-sm font-serif font-bold text-musgo flex items-center gap-1.5">
+                    <ImagePlus className="w-4 h-4 text-terracota" />
+                    <span>
+                      Fotos Reais da Peça ({productImages.length} na galeria)
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-oliva">
+                    Suba fotos do seu computador/celular, cole prints direto com{" "}
+                    <kbd className="px-1.5 py-0.5 rounded bg-areia border border-borda font-mono text-[10px] text-musgo">
+                      Ctrl+V
+                    </kbd>{" "}
+                    ou extraia automaticamente do arquivo <code>.3mf</code>!
+                  </p>
+                </div>
+
+                <label className="cursor-pointer px-3.5 py-2 rounded-xl bg-terracota hover:bg-terracota-hover text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>
+                    {uploadingPhotos ? "Otimizando..." : "+ Subir Foto(s) do PC/Celular"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      if (e.target.files) handleUploadPhotoFiles(e.target.files);
+                    }}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {/* Grade de Miniaturas das Fotos da Peça */}
+              {productImages.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                  {productImages.map((imgSrc, idx) => (
+                    <div
+                      key={idx}
+                      className={`relative group rounded-2xl overflow-hidden border-2 bg-areia h-28 ${
+                        idx === 0
+                          ? "border-terracota ring-2 ring-terracota/20"
+                          : "border-borda"
+                      }`}
+                    >
+                      <img
+                        src={imgSrc}
+                        alt={`Foto ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      {idx === 0 ? (
+                        <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-terracota text-white flex items-center gap-1 shadow">
+                          <Star className="w-2.5 h-2.5 fill-current" />
+                          Capa
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetCoverImage(idx)}
+                          className="opacity-0 group-hover:opacity-100 absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-musgo/90 text-linho transition"
+                        >
+                          Definir Capa
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(idx)}
+                        title="Remover esta foto"
+                        className="absolute top-1.5 right-1.5 p-1 rounded-full bg-linho/90 hover:bg-terracota hover:text-white text-musgo transition shadow"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-6 text-center text-xs text-oliva">
+                  Nenhuma foto adicionada ainda. Clique em &quot;+ Subir Foto(s)&quot; ou
+                  pressione <strong>Ctrl+V</strong> para colar uma imagem!
+                </div>
+              )}
+
+              {/* Campo rápido opcional para colar link ou usar Ctrl+V */}
+              <div className="flex gap-2 pt-1">
+                <div className="relative flex-1">
+                  <ClipboardPaste className="w-3.5 h-3.5 text-oliva absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={externalImageUrlInput}
+                    onChange={(e) => setExternalImageUrlInput(e.target.value)}
+                    placeholder="Clique aqui e aperte Ctrl+V para colar um print, ou cole o link de uma imagem..."
+                    className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-areia border border-borda text-xs text-musgo focus:outline-none focus:ring-1 focus:ring-terracota"
+                  />
+                </div>
+                {externalImageUrlInput.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProductImages((prev) => [
+                        externalImageUrlInput.trim(),
+                        ...prev,
+                      ]);
+                      setExternalImageUrlInput("");
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-musgo text-linho text-xs font-semibold shrink-0"
+                  >
+                    + Adicionar Link
+                  </button>
+                )}
               </div>
             </div>
 

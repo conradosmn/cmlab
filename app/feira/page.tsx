@@ -20,6 +20,8 @@ import {
   Layers,
   Lock,
   Palette,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 const CATEGORY_TABS: { id: "all" | ProductCategory; label: string }[] = [
@@ -34,6 +36,7 @@ export default function FeiraKioskPage() {
   const { products, filaments, nextDeliveryEstimate } = useCMLabStore();
 
   const [selectedCategory, setSelectedCategory] = useState<"all" | ProductCategory>("all");
+  const [activeImageIdxMap, setActiveImageIdxMap] = useState<Record<string, number>>({});
   const [isKeychainModalOpen, setIsKeychainModalOpen] = useState(false);
   const [checkoutProduct, setCheckoutProduct] = useState<Product | null>(null);
   const [preconfiguredKeychain, setPreconfiguredKeychain] = useState<{
@@ -224,6 +227,9 @@ export default function FeiraKioskPage() {
             const hours = Math.floor(product.print_time_minutes / 60);
             const mins = product.print_time_minutes % 60;
             const timeFormatted = hours > 0 ? `${hours}h${mins > 0 ? `${mins}m` : ""}` : `${mins} min`;
+            const imgs = product.images && product.images.length > 0 ? product.images : [];
+            const currentImgIdx = activeImageIdxMap[product.id] || 0;
+            const currentImgSrc = imgs[currentImgIdx] || imgs[0];
 
             return (
               <div
@@ -231,11 +237,11 @@ export default function FeiraKioskPage() {
                 className="bg-areia border border-borda rounded-3xl overflow-hidden shadow-atelier hover:shadow-atelier-lg transition flex flex-col justify-between group"
               >
                 <div>
-                  {/* Foto Real da Peça */}
+                  {/* Foto Real da Peça com Carrossel p/ Múltiplas Fotos */}
                   <div className="relative h-64 bg-linho overflow-hidden border-b border-borda">
-                    {product.images?.[0] ? (
+                    {currentImgSrc ? (
                       <img
-                        src={product.images[0]}
+                        src={currentImgSrc}
                         alt={product.name}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
@@ -243,6 +249,56 @@ export default function FeiraKioskPage() {
                       <div className="w-full h-full flex items-center justify-center text-oliva text-sm">
                         Peça Artesanal 3D
                       </div>
+                    )}
+
+                    {imgs.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveImageIdxMap((prev) => ({
+                              ...prev,
+                              [product.id]:
+                                ((prev[product.id] || 0) - 1 + imgs.length) % imgs.length,
+                            }));
+                          }}
+                          className="absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-linho/90 hover:bg-linho border border-borda text-musgo flex items-center justify-center shadow"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveImageIdxMap((prev) => ({
+                              ...prev,
+                              [product.id]: ((prev[product.id] || 0) + 1) % imgs.length,
+                            }));
+                          }}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-linho/90 hover:bg-linho border border-borda text-musgo flex items-center justify-center shadow"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                        <div className="absolute bottom-3 left-3 flex items-center gap-1 bg-linho/85 px-2 py-1 rounded-full border border-borda">
+                          {imgs.map((_, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveImageIdxMap((prev) => ({
+                                  ...prev,
+                                  [product.id]: i,
+                                }));
+                              }}
+                              className={`w-2 h-2 rounded-full transition ${
+                                i === currentImgIdx ? "bg-terracota w-4" : "bg-borda"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </>
                     )}
 
                     <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
