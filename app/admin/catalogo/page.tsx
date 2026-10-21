@@ -410,8 +410,55 @@ export default function AdminCatalogoPage() {
         const entry = zip.file(imgPath);
         if (entry) {
           const blob = await entry.async("blob");
-          const optimizedDataUrl = await compressImageBlobToDataUrl(blob, 1000, 0.84);
+          const optimizedDataUrl = await compressImageBlobToDataUrl(
+            blob,
+            1000,
+            0.84,
+            imgPath
+          );
           extractedPhotos.push(optimizedDataUrl);
+        }
+      }
+
+      // 3. Tenta extrair o título oficial do modelo dentro de 3D/3dmodel.model (metadado MakerWorld)
+      const modelXmlFile = zip.file("3D/3dmodel.model");
+      if (modelXmlFile) {
+        const modelXml = await modelXmlFile.async("string");
+        const titleMeta = modelXml.match(
+          /<metadata\s+name="Title"[^>]*>([\s\S]*?)<\/metadata>/i
+        );
+        if (titleMeta?.[1]?.trim()) {
+          setName(titleMeta[1].trim());
+        }
+      }
+
+      // 4. Extrai as cores de filamento do perfil Bambu Studio (Metadata/project_settings.config)
+      const projSettingsFile = zip.file("Metadata/project_settings.config");
+      if (projSettingsFile) {
+        try {
+          const projJson = JSON.parse(await projSettingsFile.async("string"));
+          const colors: string[] = projJson?.filament_colour || [];
+          const types: string[] = projJson?.filament_type || [];
+          if (Array.isArray(colors) && colors.length > 0) {
+            setMaxColors(Math.min(4, colors.length));
+            const matchedFilIds: string[] = [];
+            for (let i = 0; i < Math.min(4, colors.length); i++) {
+              const hex = colors[i];
+              const mat = types[i] || "PLA";
+              if (!hex) continue;
+              const existing = filaments.find(
+                (f) => f.hex_code.toLowerCase() === hex.toLowerCase()
+              );
+              if (existing) {
+                matchedFilIds.push(existing.id);
+              }
+            }
+            if (matchedFilIds.length > 0) {
+              setAllowedFilamentIds(matchedFilIds);
+            }
+          }
+        } catch {
+          // Ignora se não for JSON válido
         }
       }
 
