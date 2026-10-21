@@ -161,10 +161,10 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
     applySmartScheduleToOrders(INITIAL_ORDERS)
   );
   const [pixSettings, setPixSettings] = useState<PixSettings>({
-    pixKey: process.env.NEXT_PUBLIC_PIX_KEY || "cmcasacriativa@gmail.com",
+    pixKey: process.env.NEXT_PUBLIC_PIX_KEY || "eng.conradosmn@gmail.com",
     keyType: "email",
-    merchantName: "CM CASA CRIATIVA",
-    merchantCity: "BRASILIA",
+    merchantName: "Conrado de Sampaio Machado Neto",
+    merchantCity: "Teresina",
   });
   const [isLoaded, setIsLoaded] = useState(false);
 
