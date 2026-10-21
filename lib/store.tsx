@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 import {
   Accessory,
+  AdminUser,
   Filament,
   PaymentStatus,
   PixSettings,
@@ -13,6 +14,7 @@ import {
 } from "./types";
 import {
   INITIAL_ACCESSORIES,
+  INITIAL_ADMIN_USERS,
   INITIAL_FILAMENTS,
   INITIAL_ORDERS,
   INITIAL_PRINTERS,
@@ -23,6 +25,8 @@ import { calculate3DCosts } from "./costCalculator";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
 
 interface CMLabStoreContextValue {
+  adminUsers: AdminUser[];
+  currentAdminUser: AdminUser | null;
   printers: Printer3D[];
   filaments: Filament[];
   accessories: Accessory[];
@@ -32,6 +36,12 @@ interface CMLabStoreContextValue {
   nextDeliveryEstimate: Date;
   pixSettings: PixSettings;
   isLoaded: boolean;
+
+  // Auth & Users Actions
+  loginAdmin: (loginOrEmail: string, password: string) => boolean;
+  logoutAdmin: () => void;
+  addOrUpdateAdminUser: (user: AdminUser) => Promise<void>;
+  deleteAdminUser: (userId: string) => Promise<void>;
 
   // Actions
   updatePixSettings: (settings: PixSettings) => Promise<void>;
@@ -146,6 +156,8 @@ function applySmartScheduleToOrders(allOrders: PrintQueueOrder[]): PrintQueueOrd
 }
 
 export function CMLabProvider({ children }: { children: React.ReactNode }) {
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(INITIAL_ADMIN_USERS);
+  const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(null);
   const [printers, setPrinters] = useState<Printer3D[]>(INITIAL_PRINTERS);
   const [filaments, setFilaments] = useState<Filament[]>(INITIAL_FILAMENTS);
   const [accessories, setAccessories] = useState<Accessory[]>(INITIAL_ACCESSORIES);
@@ -168,11 +180,46 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
   });
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Carrega sessão do admin salva no navegador
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const savedSession = localStorage.getItem("cmlab_admin_session");
+      if (savedSession) {
+        const parsed = JSON.parse(savedSession);
+        if (parsed && parsed.username) {
+          setCurrentAdminUser(parsed);
+        }
+      }
+      const savedUsersBackup = localStorage.getItem("cmlab_admin_users_backup");
+      if (savedUsersBackup) {
+        const parsedUsers = JSON.parse(savedUsersBackup);
+        if (Array.isArray(parsedUsers) && parsedUsers.length > 0) {
+          setAdminUsers(parsedUsers);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const syncFromServer = useCallback(async () => {
     try {
       const res = await fetch("/api/state", { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
+      if (Array.isArray(data.adminUsers) && data.adminUsers.length > 0) {
+        setAdminUsers((prev) => {
+          // Mescla usuários do servidor com backup local para não perder cadastros
+          const map = new Map<string, AdminUser>();
+          for (const u of data.adminUsers) map.set(u.id, u);
+          for (const u of prev) {
+            if (!map.has(u.id)) map.set(u.id, u);
+          }
+          const merged = Array.from(map.values());
+          return merged;
+        });
+      }
       const loadedPrinters =
         Array.isArray(data.printers) && data.printers.length > 0
           ? data.printers
@@ -196,6 +243,7 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
 
   const persistState = useCallback(
     async (next: {
+      adminUsers?: AdminUser[];
       printers?: Printer3D[];
       filaments?: Filament[];
       accessories?: Accessory[];
@@ -645,6 +693,69 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
     [printers, products, filaments, accessories, persistState]
   );
 
+  const loginAdmin = useCallback(
+    (loginOrEmail: string, password: string): boolean => {
+      const cleanLogin = loginOrEmail.trim().toLowerCase();
+      const found = adminUsers.find(
+        (u) =>
+          (u.username.trim().toLowerCase() === cleanLogin ||
+            u.email.trim().toLowerCase() === cleanLogin) &&
+          u.password === password
+      );
+      if (found) {
+        setCurrentAdminUser(found);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("cmlab_admin_session", JSON.stringify(found));
+        }
+        return true;
+      }
+      return false;
+    },
+    [adminUsers]
+  );
+
+  const logoutAdmin = useCallback(() => {
+    setCurrentAdminUser(null);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("cmlab_admin_session");
+    }
+  }, []);
+
+  const addOrUpdateAdminUser = useCallback(
+    async (user: AdminUser) => {
+      const exists = adminUsers.some((u) => u.id === user.id);
+      const nextUsers = exists
+        ? adminUsers.map((u) => (u.id === user.id ? user : u))
+        : [...adminUsers, user];
+      setAdminUsers(nextUsers);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("cmlab_admin_users_backup", JSON.stringify(nextUsers));
+      }
+      if (currentAdminUser?.id === user.id) {
+        setCurrentAdminUser(user);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("cmlab_admin_session", JSON.stringify(user));
+        }
+      }
+      await persistState({ adminUsers: nextUsers });
+    },
+    [adminUsers, currentAdminUser, persistState]
+  );
+
+  const deleteAdminUser = useCallback(
+    async (userId: string) => {
+      const target = adminUsers.find((u) => u.id === userId);
+      if (target?.is_master || target?.username === "conradosmn") return;
+      const nextUsers = adminUsers.filter((u) => u.id !== userId);
+      setAdminUsers(nextUsers);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("cmlab_admin_users_backup", JSON.stringify(nextUsers));
+      }
+      await persistState({ adminUsers: nextUsers });
+    },
+    [adminUsers, persistState]
+  );
+
   const updatePixSettings = useCallback(
     async (settings: PixSettings) => {
       setPixSettings(settings);
@@ -689,6 +800,8 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
   return (
     <CMLabStoreContext.Provider
       value={{
+        adminUsers,
+        currentAdminUser,
         printers,
         filaments,
         accessories,
@@ -698,6 +811,10 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
         nextDeliveryEstimate,
         pixSettings,
         isLoaded,
+        loginAdmin,
+        logoutAdmin,
+        addOrUpdateAdminUser,
+        deleteAdminUser,
         updatePixSettings,
         clearDemoOrdersAndProducts,
         addOrder,

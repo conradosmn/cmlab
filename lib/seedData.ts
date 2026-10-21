@@ -1,4 +1,17 @@
-import { Accessory, Filament, Printer3D, PrintQueueOrder, Product } from "./types";
+import { Accessory, AdminUser, Filament, Printer3D, PrintQueueOrder, Product } from "./types";
+
+export const INITIAL_ADMIN_USERS: AdminUser[] = [
+  {
+    id: "admin-master-conrado",
+    username: "conradosmn",
+    email: "eng.conradosmn@gmail.com",
+    password: "CSmn1886@",
+    full_name: "Conrado de Sampaio Machado Neto",
+    phone: "(86) 99999-9999",
+    is_master: true,
+    created_at: "2026-10-20T00:00:00.000Z",
+  },
+];
 
 export const INITIAL_PRINTERS: Printer3D[] = [
   {

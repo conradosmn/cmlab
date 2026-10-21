@@ -11,13 +11,21 @@ import {
   CalendarClock,
   Tablet,
   RotateCcw,
+  Users,
+  LogOut,
 } from "lucide-react";
 import { useCMLabStore } from "@/lib/store";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
 export function AdminNav() {
   const pathname = usePathname();
-  const { orders, filaments, resetDemoData } = useCMLabStore();
+  const {
+    orders,
+    filaments,
+    resetDemoData,
+    currentAdminUser,
+    logoutAdmin,
+  } = useCMLabStore();
 
   const awaitingTapCount = orders.filter(
     (o) => o.payment_status === "awaiting_tap_to_pay"
@@ -57,6 +65,11 @@ export function AdminNav() {
       label: "Insumos & Compras",
       icon: PackageSearch,
       badge: restockAlertCount > 0 ? restockAlertCount : undefined,
+    },
+    {
+      href: "/admin/usuarios",
+      label: "Usuários",
+      icon: Users,
     },
   ];
 
@@ -134,6 +147,16 @@ export function AdminNav() {
           >
             <RotateCcw className="w-4 h-4" />
           </button>
+          {currentAdminUser && (
+            <button
+              onClick={logoutAdmin}
+              title={`Sair da conta (${currentAdminUser.username})`}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-oliva hover:text-red-700 hover:bg-linho border border-borda transition"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Sair</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

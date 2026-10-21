@@ -132,6 +132,17 @@ export interface PixSettings {
   merchantCity: string;
 }
 
+export interface AdminUser {
+  id: string;
+  username: string;
+  email: string;
+  password: string;
+  full_name: string;
+  phone: string;
+  is_master?: boolean;
+  created_at: string;
+}
+
 export interface PrintQueueOrder {
   id: string;
   order_number: number;

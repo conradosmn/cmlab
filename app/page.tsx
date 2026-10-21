@@ -14,10 +14,12 @@ import {
   Printer,
   CheckCircle2,
   AlertTriangle,
+  Users,
+  Lock,
 } from "lucide-react";
 
 export default function HomePage() {
-  const { orders, products, filaments } = useCMLabStore();
+  const { orders, products, filaments, currentAdminUser } = useCMLabStore();
 
   const paidOrders = orders.filter((o) => o.payment_status === "paid");
   const awaitingTap = orders.filter((o) => o.payment_status === "awaiting_tap_to_pay");
@@ -69,13 +71,27 @@ export default function HomePage() {
           <div className="grid grid-cols-2 gap-3 w-full lg:w-auto shrink-0">
             <div className="bg-linho p-4 rounded-2xl border border-borda">
               <div className="text-xs text-oliva">Caixa Confirmado Feira</div>
-              <div className="text-2xl font-serif font-bold text-musgo mt-0.5">
-                R$ {revenueTotal.toFixed(2).replace(".", ",")}
-              </div>
-              <div className="text-[11px] text-oliva mt-1 flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-musgo" />
-                {paidOrders.length} pedidos pagos
-              </div>
+              {currentAdminUser ? (
+                <>
+                  <div className="text-2xl font-serif font-bold text-musgo mt-0.5">
+                    R$ {revenueTotal.toFixed(2).replace(".", ",")}
+                  </div>
+                  <div className="text-[11px] text-oliva mt-1 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-musgo" />
+                    {paidOrders.length} pedidos pagos
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-lg font-serif font-bold text-musgo mt-1 flex items-center gap-1.5">
+                    <Lock className="w-4 h-4 text-terracota" />
+                    <span>Restrito Admin</span>
+                  </div>
+                  <div className="text-[11px] text-oliva mt-1">
+                    Faça login no Admin
+                  </div>
+                </>
+              )}
             </div>
             <div className="bg-linho p-4 rounded-2xl border border-borda">
               <div className="text-xs text-oliva">Peças no Catálogo</div>
@@ -213,7 +229,7 @@ export default function HomePage() {
           {/* 5. /admin/insumos */}
           <Link
             href="/admin/insumos"
-            className="group bg-areia hover:bg-areia/70 border border-borda hover:border-argila rounded-3xl p-6 shadow-atelier transition flex flex-col justify-between md:col-span-2 lg:col-span-2"
+            className="group bg-areia hover:bg-areia/70 border border-borda hover:border-argila rounded-3xl p-6 shadow-atelier transition flex flex-col justify-between"
           >
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -221,20 +237,47 @@ export default function HomePage() {
                   <PackageSearch className="w-6 h-6" />
                 </span>
                 <span className="px-3 py-1 rounded-full text-xs font-semibold bg-terracota/15 text-terracota">
-                  Lista de Compras Automática Ativa
+                  Lista de Compras Ativa
                 </span>
               </div>
               <h2 className="text-2xl font-serif font-bold text-musgo">
-                5. Estoque de Bobinas, Acessórios & Lista de Compras (/admin/insumos)
+                5. Estoque, Impressoras & Insumos (/admin/insumos)
               </h2>
               <p className="text-xs text-oliva leading-relaxed">
-                Controle de bobinas de filamento (custo/g automático, cores em estoque e cores sob
-                encomenda), pacotes de acessórios (corrente, ilha, ímã, gota de silicone, kit LED)
-                e alerta automático de compras financiado pelos pedidos pagos antecipadamente na feira.
+                Controle de bobinas de filamento, pacotes de acessórios, frota de impressoras 3D
+                e alerta automático de compras financiado pelos pedidos pagos na feira.
               </p>
             </div>
             <div className="mt-6 pt-4 border-t border-borda flex items-center justify-between text-xs font-semibold text-musgo">
-              <span>Gerenciar Bobinas, Insumos & Reposição</span>
+              <span>Gerenciar Bobinas, Insumos & Frota</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+
+          {/* 6. /admin/usuarios */}
+          <Link
+            href="/admin/usuarios"
+            className="group bg-areia hover:bg-areia/70 border border-borda hover:border-argila rounded-3xl p-6 shadow-atelier transition flex flex-col justify-between"
+          >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="p-3 rounded-2xl bg-musgo text-linho">
+                  <Users className="w-6 h-6" />
+                </span>
+                <span className="px-3 py-1 rounded-full text-xs font-medium bg-linho text-oliva border border-borda">
+                  Login & Equipe Admin
+                </span>
+              </div>
+              <h2 className="text-2xl font-serif font-bold text-musgo">
+                6. Usuários & Acesso Admin (/admin/usuarios)
+              </h2>
+              <p className="text-xs text-oliva leading-relaxed">
+                Gerencie os usuários com acesso ao painel administrativo (nome completo, e-mail,
+                telefone e senha). A vitrine Kiosk (/feira) permanece aberta para os clientes.
+              </p>
+            </div>
+            <div className="mt-6 pt-4 border-t border-borda flex items-center justify-between text-xs font-semibold text-musgo">
+              <span>Gerenciar Usuários Admin</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </div>
           </Link>

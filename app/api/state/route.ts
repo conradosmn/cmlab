@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import {
   INITIAL_ACCESSORIES,
+  INITIAL_ADMIN_USERS,
   INITIAL_FILAMENTS,
   INITIAL_ORDERS,
   INITIAL_PRINTERS,
@@ -13,6 +14,18 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
 const DATA_DIR = path.join(process.cwd(), ".data");
 const DB_FILE = path.join(DATA_DIR, "cmlab-db.json");
 
+function ensureMasterAdmin(users: any[] | undefined) {
+  const list = Array.isArray(users) ? [...users] : [];
+  const master = INITIAL_ADMIN_USERS[0];
+  const exists = list.some(
+    (u) => u.username?.toLowerCase() === master.username.toLowerCase()
+  );
+  if (!exists) {
+    list.unshift(master);
+  }
+  return list;
+}
+
 function readLocalDb() {
   try {
     if (!fs.existsSync(DATA_DIR)) {
@@ -20,6 +33,7 @@ function readLocalDb() {
     }
     if (!fs.existsSync(DB_FILE)) {
       const initial = {
+        adminUsers: INITIAL_ADMIN_USERS,
         printers: INITIAL_PRINTERS,
         filaments: INITIAL_FILAMENTS,
         accessories: INITIAL_ACCESSORIES,
@@ -35,9 +49,11 @@ function readLocalDb() {
     if (!Array.isArray(parsed.printers) || parsed.printers.length === 0) {
       parsed.printers = INITIAL_PRINTERS;
     }
+    parsed.adminUsers = ensureMasterAdmin(parsed.adminUsers);
     return parsed;
   } catch {
     return {
+      adminUsers: INITIAL_ADMIN_USERS,
       printers: INITIAL_PRINTERS,
       filaments: INITIAL_FILAMENTS,
       accessories: INITIAL_ACCESSORIES,
@@ -106,7 +122,18 @@ export async function GET() {
         }
 
         const local = readLocalDb();
+        let remoteAdminUsers = local.adminUsers || INITIAL_ADMIN_USERS;
+        try {
+          const usrRes = await supabase.from("admin_users").select("*");
+          if (!usrRes.error && Array.isArray(usrRes.data) && usrRes.data.length > 0) {
+            remoteAdminUsers = ensureMasterAdmin(usrRes.data);
+          }
+        } catch {
+          // fallback silencioso caso a tabela admin_users ainda não exista no Supabase
+        }
+
         return NextResponse.json({
+          adminUsers: remoteAdminUsers,
           printers: local.printers || INITIAL_PRINTERS,
           filaments: (filRes.data || []).map((f: any) => ({
             ...f,
@@ -159,6 +186,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const local = readLocalDb();
     const next = writeLocalDb({
+      adminUsers: ensureMasterAdmin(body.adminUsers ?? local.adminUsers),
       printers: body.printers ?? local.printers,
       filaments: body.filaments ?? local.filaments,
       accessories: body.accessories ?? local.accessories,
@@ -169,6 +197,14 @@ export async function POST(req: Request) {
 
     if (isSupabaseConfigured && supabase) {
       try {
+        if (Array.isArray(body.adminUsers)) {
+          try {
+            const cleanUsers = ensureMasterAdmin(body.adminUsers);
+            await supabase.from("admin_users").upsert(cleanUsers);
+          } catch {
+            // fallback caso tabela admin_users ainda não tenha sido criada
+          }
+        }
         if (Array.isArray(body.filaments)) {
           const cleanFilaments = body.filaments.map(
             ({ cost_per_gram, ...rest }: any) => rest

@@ -108,11 +108,27 @@ CREATE TABLE IF NOT EXISTS print_queue_orders (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 6. Usuários Administrativos do Painel (/admin)
+CREATE TABLE IF NOT EXISTS admin_users (
+  id TEXT PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  email TEXT NOT NULL,
+  password TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  is_master BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Permissões e Políticas de Acesso (Row Level Security aberta para operação da Feira)
 ALTER TABLE filaments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE accessories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE print_queue_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Acesso Total Feira AdminUsers" ON admin_users;
+CREATE POLICY "Acesso Total Feira AdminUsers" ON admin_users FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Acesso Total Feira Filaments" ON filaments;
 CREATE POLICY "Acesso Total Feira Filaments" ON filaments FOR ALL USING (true) WITH CHECK (true);
