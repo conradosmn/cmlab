@@ -256,6 +256,27 @@ export const INITIAL_ACCESSORIES: Accessory[] = [
 
 export const INITIAL_PRODUCTS: Product[] = [
   {
+    id: "prod-teste-pix-1real",
+    name: "Mimo Teste PIX (R$ 1,00)",
+    category: "fidgets",
+    description:
+      "Peça de teste rápido para validar o pagamento real via QR Code PIX de R$ 1,00 na conta cadastrada.",
+    makerworld_url: "https://makerworld.com/en",
+    images: [
+      "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?auto=format&fit=crop&w=900&q=80",
+    ],
+    print_time_minutes: 10,
+    weight_grams: 5,
+    max_colors: 1,
+    allowed_filament_ids: ["fil-terracota", "fil-marmore", "fil-musgo"],
+    accessories: [],
+    production_cost: 0.65,
+    price: 1.0,
+    is_custom_keychain: false,
+    ready_stock_qty: 10,
+    active: true,
+  },
+  {
     id: "prod-luminaria-plissada",
     name: "Luminária Orgânica Plissada Nord",
     category: "decoracao",

@@ -673,13 +673,20 @@ export function CheckoutModal({
                 <button
                   type="button"
                   onClick={() => setPaymentMethod("pix")}
-                  className={`p-3.5 rounded-2xl border text-left transition flex flex-col justify-between ${
+                  className={`p-3.5 rounded-2xl border-2 text-left transition flex flex-col justify-between relative ${
                     paymentMethod === "pix"
-                      ? "bg-musgo text-linho border-musgo shadow-sm"
+                      ? "bg-musgo text-linho border-terracota shadow-md ring-2 ring-terracota/40"
                       : "bg-areia text-musgo border-borda hover:border-argila"
                   }`}
                 >
-                  <QrCode className="w-5 h-5 mb-1.5" />
+                  <div className="flex items-center justify-between w-full mb-1.5">
+                    <QrCode className="w-5 h-5" />
+                    {paymentMethod === "pix" && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-terracota text-white">
+                        ✓ Ativo
+                      </span>
+                    )}
+                  </div>
                   <div className="font-semibold text-sm">PIX QR Code</div>
                   <div className="text-[11px] opacity-80">Na tela do iPad</div>
                 </button>
@@ -687,13 +694,20 @@ export function CheckoutModal({
                 <button
                   type="button"
                   onClick={() => setPaymentMethod("credit_tap")}
-                  className={`p-3.5 rounded-2xl border text-left transition flex flex-col justify-between ${
+                  className={`p-3.5 rounded-2xl border-2 text-left transition flex flex-col justify-between relative ${
                     paymentMethod === "credit_tap"
-                      ? "bg-musgo text-linho border-musgo shadow-sm"
+                      ? "bg-musgo text-linho border-terracota shadow-md ring-2 ring-terracota/40"
                       : "bg-areia text-musgo border-borda hover:border-argila"
                   }`}
                 >
-                  <Smartphone className="w-5 h-5 mb-1.5" />
+                  <div className="flex items-center justify-between w-full mb-1.5">
+                    <Smartphone className="w-5 h-5" />
+                    {paymentMethod === "credit_tap" && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-terracota text-white">
+                        ✓ Ativo
+                      </span>
+                    )}
+                  </div>
                   <div className="font-semibold text-sm">Cartão Crédito</div>
                   <div className="text-[11px] opacity-80">Tap to Pay Celular</div>
                 </button>
@@ -701,13 +715,20 @@ export function CheckoutModal({
                 <button
                   type="button"
                   onClick={() => setPaymentMethod("debit_tap")}
-                  className={`p-3.5 rounded-2xl border text-left transition flex flex-col justify-between ${
+                  className={`p-3.5 rounded-2xl border-2 text-left transition flex flex-col justify-between relative ${
                     paymentMethod === "debit_tap"
-                      ? "bg-musgo text-linho border-musgo shadow-sm"
+                      ? "bg-musgo text-linho border-terracota shadow-md ring-2 ring-terracota/40"
                       : "bg-areia text-musgo border-borda hover:border-argila"
                   }`}
                 >
-                  <Smartphone className="w-5 h-5 mb-1.5" />
+                  <div className="flex items-center justify-between w-full mb-1.5">
+                    <Smartphone className="w-5 h-5" />
+                    {paymentMethod === "debit_tap" && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-terracota text-white">
+                        ✓ Ativo
+                      </span>
+                    )}
+                  </div>
                   <div className="font-semibold text-sm">Cartão Débito</div>
                   <div className="text-[11px] opacity-80">Tap to Pay Celular</div>
                 </button>
@@ -728,7 +749,11 @@ export function CheckoutModal({
               >
                 <Sparkles className="w-4 h-4" />
                 <span>
-                  Ir para Pagamento (R$ {totalPrice.toFixed(2).replace(".", ",")})
+                  {paymentMethod === "pix"
+                    ? `Gerar QR Code PIX (R$ ${totalPrice.toFixed(2).replace(".", ",")})`
+                    : paymentMethod === "credit_tap"
+                    ? `Pagar no Cartão de Crédito (R$ ${totalPrice.toFixed(2).replace(".", ",")})`
+                    : `Pagar no Cartão de Débito (R$ ${totalPrice.toFixed(2).replace(".", ",")})`}
                 </span>
               </button>
             </div>
@@ -737,7 +762,47 @@ export function CheckoutModal({
 
         {/* STEP 2: AGUARDANDO PAGAMENTO (PIX QR CODE OU TAP TO PAY MERCADO PAGO) */}
         {step === "payment_waiting" && (
-          <div className="p-6 text-center space-y-6">
+          <div className="p-6 text-center space-y-5">
+            {/* Seletor rápido caso o cliente queira trocar entre PIX e Cartão na própria tela de pagamento */}
+            <div className="flex flex-wrap items-center justify-center gap-2 pb-2 border-b border-borda">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("pix")}
+                className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 ${
+                  paymentMethod === "pix"
+                    ? "bg-musgo text-linho border-musgo shadow-sm"
+                    : "bg-areia text-musgo border-borda hover:bg-borda/50"
+                }`}
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span>PIX QR Code</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("credit_tap")}
+                className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 ${
+                  paymentMethod === "credit_tap"
+                    ? "bg-musgo text-linho border-musgo shadow-sm"
+                    : "bg-areia text-musgo border-borda hover:bg-borda/50"
+                }`}
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span>Cartão de Crédito</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("debit_tap")}
+                className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 ${
+                  paymentMethod === "debit_tap"
+                    ? "bg-musgo text-linho border-musgo shadow-sm"
+                    : "bg-areia text-musgo border-borda hover:bg-borda/50"
+                }`}
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span>Cartão de Débito</span>
+              </button>
+            </div>
+
             {paymentMethod === "pix" ? (
               <div className="space-y-4">
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-areia border border-borda text-xs font-semibold text-musgo">
@@ -788,14 +853,17 @@ export function CheckoutModal({
                   </button>
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-2 space-y-1.5">
                   <button
                     type="button"
                     onClick={handleSimulatePixWebhook}
                     className="px-6 py-3.5 rounded-2xl bg-musgo hover:bg-musgo/90 text-linho text-sm font-semibold shadow transition"
                   >
-                    ✅ Simular Confirmação Webhook PIX Mercado Pago
+                    ✅ Já realizei o PIX (Liberar Minha Reserva)
                   </button>
+                  <p className="text-[11px] text-oliva">
+                    Ou aguarde o atendente confirmar o recebimento pelo celular em <code>/admin/caixa</code>
+                  </p>
                 </div>
               </div>
             ) : (
