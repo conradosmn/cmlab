@@ -89,6 +89,8 @@ export function CheckoutModal({
     return allowed.length > 0 ? allowed : filaments.filter((f) => f.active);
   }, [product, filaments]);
 
+  const productId = product?.id ?? null;
+
   useEffect(() => {
     if (isOpen && product) {
       setStep("details");
@@ -107,7 +109,9 @@ export function CheckoutModal({
         );
       }
     }
-  }, [isOpen, product, preconfiguredKeychain, allowedFilaments]);
+    // Executa apenas quando o modal abre ou quando troca de produto
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, productId]);
 
   const applyScalePreset = (deltaPercent: number) => {
     if (!product) return;
