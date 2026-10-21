@@ -139,25 +139,52 @@ export function CheckoutModal({
     }
   }, [step, currentOrderInStore]);
 
-  if (!isOpen || !product) return null;
-
   const totalPrice = preconfiguredKeychain
     ? preconfiguredKeychain.totalPrice
     : customScaleEnabled
     ? Math.max(1, overridePriceBrl)
-    : product.price;
+    : product?.price || 0;
 
   const weightGrams = preconfiguredKeychain
     ? preconfiguredKeychain.weightGrams
     : customScaleEnabled
     ? Math.max(1, overrideWeightGrams)
-    : product.weight_grams;
+    : product?.weight_grams || 0;
 
   const printTimeMinutes = preconfiguredKeychain
     ? preconfiguredKeychain.printTimeMinutes
     : customScaleEnabled
     ? Math.max(1, overridePrintTimeMinutes)
-    : product.print_time_minutes;
+    : product?.print_time_minutes || 0;
+
+  const pixPayload = useMemo(() => {
+    if (!isOpen || !product) return "";
+    return generatePixBrCode({
+      pixKey: pixSettings.pixKey || "eng.conradosmn@gmail.com",
+      keyType: pixSettings.keyType || "email",
+      merchantName: pixSettings.merchantName || "Conrado de Sampaio Machado Neto",
+      merchantCity: pixSettings.merchantCity || "Teresina",
+      amount: totalPrice,
+      txid: `PEDIDO${currentOrderInStore?.order_number || 100}`,
+    });
+  }, [isOpen, product, pixSettings, totalPrice, currentOrderInStore?.order_number]);
+
+  useEffect(() => {
+    if (isOpen && step === "payment_waiting" && paymentMethod === "pix" && pixPayload) {
+      QRCode.toDataURL(pixPayload, {
+        width: 260,
+        margin: 1,
+        color: {
+          dark: "#4A4F3B",
+          light: "#FFFFFF",
+        },
+      })
+        .then((url) => setPixQrDataUrl(url))
+        .catch((err) => console.error("QR Error:", err));
+    }
+  }, [isOpen, step, paymentMethod, pixPayload]);
+
+  if (!isOpen || !product) return null;
 
   // Monta as cores escolhidas (se veio do Simulador de Chaveiro ou da seleção do Produto, já usando o peso real escalado!)
   const resolvedColors: SelectedColorChoice[] = preconfiguredKeychain
@@ -246,32 +273,6 @@ export function CheckoutModal({
     await confirmOrderPayment(activeOrderId, `PIX-MP-${Date.now()}`);
     setStep("confirmed");
   };
-
-  const pixPayload = useMemo(() => {
-    return generatePixBrCode({
-      pixKey: pixSettings.pixKey || "cmcasacriativa@gmail.com",
-      keyType: pixSettings.keyType || "email",
-      merchantName: pixSettings.merchantName || "CM CASA CRIATIVA",
-      merchantCity: pixSettings.merchantCity || "BRASILIA",
-      amount: totalPrice,
-      txid: `PEDIDO${currentOrderInStore?.order_number || 100}`,
-    });
-  }, [pixSettings, totalPrice, currentOrderInStore?.order_number]);
-
-  useEffect(() => {
-    if (step === "payment_waiting" && paymentMethod === "pix" && pixPayload) {
-      QRCode.toDataURL(pixPayload, {
-        width: 260,
-        margin: 1,
-        color: {
-          dark: "#4A4F3B",
-          light: "#FFFFFF",
-        },
-      })
-        .then((url) => setPixQrDataUrl(url))
-        .catch((err) => console.error("QR Error:", err));
-    }
-  }, [step, paymentMethod, pixPayload]);
 
   return (
     <div className="fixed inset-0 z-50 bg-musgo/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
