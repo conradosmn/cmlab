@@ -1,4 +1,21 @@
-import { Accessory, Filament, PrintQueueOrder, Product } from "./types";
+import { Accessory, Filament, Printer3D, PrintQueueOrder, Product } from "./types";
+
+export const INITIAL_PRINTERS: Printer3D[] = [
+  {
+    id: "printer-a1-01",
+    code: "IMP-A1-01",
+    name: "Bambu Lab A1 Combo #01 (Principal)",
+    brand: "Bambu Lab",
+    model: "A1 Combo (AMS Lite)",
+    purchase_date: "2026-09-15",
+    purchase_price: 4500.0,
+    lifespan_hours: 8000,
+    maintenance_reserve_percent: 0,
+    average_power_watts: 150,
+    hourly_depreciation_cost: 0.56, // R$ 4.500 / 8.000h = R$ 0,5625/h
+    active: true,
+  },
+];
 
 export const INITIAL_FILAMENTS: Filament[] = [
   {

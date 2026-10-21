@@ -5,6 +5,7 @@ import {
   INITIAL_ACCESSORIES,
   INITIAL_FILAMENTS,
   INITIAL_ORDERS,
+  INITIAL_PRINTERS,
   INITIAL_PRODUCTS,
 } from "@/lib/seedData";
 import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
@@ -19,6 +20,7 @@ function readLocalDb() {
     }
     if (!fs.existsSync(DB_FILE)) {
       const initial = {
+        printers: INITIAL_PRINTERS,
         filaments: INITIAL_FILAMENTS,
         accessories: INITIAL_ACCESSORIES,
         products: INITIAL_PRODUCTS,
@@ -29,9 +31,14 @@ function readLocalDb() {
       return initial;
     }
     const raw = fs.readFileSync(DB_FILE, "utf-8");
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.printers) || parsed.printers.length === 0) {
+      parsed.printers = INITIAL_PRINTERS;
+    }
+    return parsed;
   } catch {
     return {
+      printers: INITIAL_PRINTERS,
       filaments: INITIAL_FILAMENTS,
       accessories: INITIAL_ACCESSORIES,
       products: INITIAL_PRODUCTS,
@@ -88,6 +95,7 @@ export async function GET() {
           await supabase.from("print_queue_orders").upsert(INITIAL_ORDERS);
 
           return NextResponse.json({
+            printers: INITIAL_PRINTERS,
             filaments: INITIAL_FILAMENTS,
             accessories: INITIAL_ACCESSORIES,
             products: INITIAL_PRODUCTS,
@@ -99,6 +107,7 @@ export async function GET() {
 
         const local = readLocalDb();
         return NextResponse.json({
+          printers: local.printers || INITIAL_PRINTERS,
           filaments: (filRes.data || []).map((f: any) => ({
             ...f,
             purchase_price: Number(f.purchase_price),
@@ -150,6 +159,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const local = readLocalDb();
     const next = writeLocalDb({
+      printers: body.printers ?? local.printers,
       filaments: body.filaments ?? local.filaments,
       accessories: body.accessories ?? local.accessories,
       products: body.products ?? local.products,

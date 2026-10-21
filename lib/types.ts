@@ -42,6 +42,21 @@ export interface Accessory {
   active: boolean;
 }
 
+export interface Printer3D {
+  id: string;
+  code: string;
+  name: string;
+  brand: string;
+  model: string;
+  purchase_date: string;
+  purchase_price: number;
+  lifespan_hours: number;
+  maintenance_reserve_percent: number;
+  average_power_watts: number;
+  hourly_depreciation_cost: number;
+  active: boolean;
+}
+
 export interface ProductAccessoryItem {
   accessory_id: string;
   quantity: number;

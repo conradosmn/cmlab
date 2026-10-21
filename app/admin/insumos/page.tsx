@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { AdminNav } from "@/components/AdminNav";
 import { useCMLabStore } from "@/lib/store";
-import { Accessory, AccessoryCategory, Filament } from "@/lib/types";
+import { Accessory, AccessoryCategory, Filament, Printer3D } from "@/lib/types";
 import {
   ShoppingCart,
   Plus,
@@ -22,6 +22,8 @@ import {
   ChevronDown,
   Calendar,
   Check,
+  Printer,
+  Zap,
 } from "lucide-react";
 
 const DEFAULT_FILAMENT_BRANDS = [
@@ -141,10 +143,13 @@ const QUICK_RESOURCE_PRESETS: {
 
 export default function AdminInsumosPage() {
   const {
+    printers,
     filaments,
     accessories,
     products,
     orders,
+    addOrUpdatePrinter,
+    deletePrinter,
     addOrUpdateFilament,
     deleteFilament,
     restockFilament,
@@ -153,7 +158,68 @@ export default function AdminInsumosPage() {
     restockAccessory,
   } = useCMLabStore();
 
-  const [activeTab, setActiveTab] = useState<"all" | "accessories" | "filaments">("all");
+  const [activeTab, setActiveTab] = useState<
+    "all" | "printers" | "accessories" | "filaments"
+  >("all");
+
+  // Estados do Formulário de Impressora 3D (Parque de Máquinas)
+  const [editingPrinterId, setEditingPrinterId] = useState<string | null>(null);
+  const [printerCode, setPrinterCode] = useState("IMP-A1-02");
+  const [printerName, setPrinterName] = useState("");
+  const [printerBrand, setPrinterBrand] = useState("Bambu Lab");
+  const [printerModel, setPrinterModel] = useState("A1 Combo (AMS Lite)");
+  const [printerPurchaseDate, setPrinterPurchaseDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const [printerPrice, setPrinterPrice] = useState<number>(4500);
+  const [printerLifespanHours, setPrinterLifespanHours] = useState<number>(8000);
+  const [printerMaintPercent, setPrinterMaintPercent] = useState<number>(0);
+  const [printerPowerWatts, setPrinterPowerWatts] = useState<number>(150);
+
+  const previewPrinterHourlyCost = useMemo(() => {
+    const hrs = Math.max(100, printerLifespanHours || 8000);
+    const mult = 1 + (printerMaintPercent || 0) / 100;
+    return Number(((printerPrice * mult) / hrs).toFixed(2));
+  }, [printerPrice, printerLifespanHours, printerMaintPercent]);
+
+  const handleSavePrinter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!printerName.trim()) return;
+    const payload: Printer3D = {
+      id: editingPrinterId || `printer-${Date.now()}`,
+      code: printerCode.trim() || "IMP-A1",
+      name: printerName.trim(),
+      brand: printerBrand.trim() || "Bambu Lab",
+      model: printerModel.trim() || "A1 Combo",
+      purchase_date:
+        printerPurchaseDate || new Date().toISOString().slice(0, 10),
+      purchase_price: Number(printerPrice),
+      lifespan_hours: Number(printerLifespanHours),
+      maintenance_reserve_percent: Number(printerMaintPercent),
+      average_power_watts: Number(printerPowerWatts),
+      hourly_depreciation_cost: previewPrinterHourlyCost,
+      active: true,
+    };
+    await addOrUpdatePrinter(payload);
+    setEditingPrinterId(null);
+    setPrinterName("");
+    setPrinterCode(`IMP-A1-0${printers.length + 2}`);
+  };
+
+  const handleEditPrinter = (p: Printer3D) => {
+    setEditingPrinterId(p.id);
+    setPrinterCode(p.code);
+    setPrinterName(p.name);
+    setPrinterBrand(p.brand);
+    setPrinterModel(p.model);
+    setPrinterPurchaseDate(
+      p.purchase_date || new Date().toISOString().slice(0, 10)
+    );
+    setPrinterPrice(p.purchase_price);
+    setPrinterLifespanHours(p.lifespan_hours);
+    setPrinterMaintPercent(p.maintenance_reserve_percent || 0);
+    setPrinterPowerWatts(p.average_power_watts);
+  };
 
   // Estados do Formulário de Recurso / Acessório (Chaveiro, Gota de Silicone, etc.)
   const [editingAccId, setEditingAccId] = useState<string | null>(null);
@@ -399,7 +465,7 @@ export default function AdminInsumosPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setActiveTab("all")}
@@ -410,6 +476,18 @@ export default function AdminInsumosPage() {
               }`}
             >
               Visão Completa
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("printers")}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-semibold transition flex items-center gap-1.5 ${
+                activeTab === "printers"
+                  ? "bg-musgo text-linho shadow-sm"
+                  : "bg-linho text-musgo border border-borda"
+              }`}
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Impressoras 3D ({printers.length})</span>
             </button>
             <button
               type="button"
@@ -435,6 +513,286 @@ export default function AdminInsumosPage() {
             </button>
           </div>
         </section>
+
+        {/* BLOCO 0: PARQUE DE IMPRESSORAS 3D (Cálculo Automático de Depreciação R$/h e Potência W) */}
+        {(activeTab === "all" || activeTab === "printers") && (
+          <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Lista de Impressoras Cadastradas */}
+            <div className="lg:col-span-7 bg-areia border border-borda rounded-3xl p-6 shadow-atelier space-y-4">
+              <div className="flex items-center justify-between border-b border-borda pb-3">
+                <div>
+                  <h2 className="text-xl font-serif font-bold text-musgo flex items-center gap-2">
+                    <Printer className="w-5 h-5 text-terracota" />
+                    <span>Minhas Impressoras 3D (Parque de Máquinas)</span>
+                  </h2>
+                  <p className="text-xs text-oliva">
+                    O valor pago na impressora dividido pela vida útil alimenta automaticamente a depreciação (R$/h) no Catálogo!
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {printers.map((p) => (
+                  <div
+                    key={p.id}
+                    className="bg-linho border-2 border-argila/60 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-md bg-musgo text-linho text-[10px] font-bold">
+                          {p.code}
+                        </span>
+                        <span className="text-base font-serif font-bold text-musgo">
+                          {p.name}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-terracota/15 text-terracota text-[11px] font-semibold">
+                          {p.brand} • {p.model}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-oliva">
+                        <span>
+                          Valor pago:{" "}
+                          <strong className="text-musgo">
+                            R$ {p.purchase_price.toFixed(2).replace(".", ",")}
+                          </strong>
+                        </span>
+                        <span>
+                          Vida útil:{" "}
+                          <strong className="text-musgo">
+                            {p.lifespan_hours.toLocaleString("pt-BR")} h
+                          </strong>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Zap className="w-3.5 h-3.5 text-terracota" />
+                          Potência média:{" "}
+                          <strong className="text-musgo">
+                            {p.average_power_watts} W
+                          </strong>
+                        </span>
+                        {p.purchase_date && (
+                          <span>
+                            Compra:{" "}
+                            <strong className="text-musgo">
+                              {new Date(
+                                p.purchase_date + "T12:00:00"
+                              ).toLocaleDateString("pt-BR")}
+                            </strong>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-3 border-t sm:border-t-0 pt-2 sm:pt-0 border-borda">
+                      <div className="text-right">
+                        <div className="text-[10px] uppercase font-bold text-oliva">
+                          Depreciação / Hora
+                        </div>
+                        <div className="text-xl font-serif font-bold text-terracota">
+                          R$ {p.hourly_depreciation_cost.toFixed(2).replace(".", ",")}/h
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleEditPrinter(p)}
+                          className="p-2 rounded-xl bg-areia hover:bg-borda/60 text-musgo border border-borda transition"
+                          title="Editar Impressora"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        {printers.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => deletePrinter(p.id)}
+                            className="p-2 rounded-xl bg-areia hover:bg-terracota hover:text-white text-oliva border border-borda transition"
+                            title="Remover Impressora"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Formulário de Cadastro / Edição de Impressora 3D */}
+            <form
+              onSubmit={handleSavePrinter}
+              className="lg:col-span-5 bg-areia border border-borda rounded-3xl p-6 shadow-atelier space-y-4"
+            >
+              <div className="border-b border-borda pb-3 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase tracking-widest text-terracota font-bold">
+                    {editingPrinterId
+                      ? "Editando Máquina Selecionada"
+                      : "Adicionar Nova Impressora ao Atelier"}
+                  </span>
+                  <h3 className="text-lg font-serif font-bold text-musgo">
+                    {editingPrinterId
+                      ? "Atualizar Impressora 3D"
+                      : "Cadastrar Impressora 3D"}
+                  </h3>
+                </div>
+                {editingPrinterId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingPrinterId(null);
+                      setPrinterName("");
+                    }}
+                    className="text-xs underline text-oliva hover:text-musgo"
+                  >
+                    Cancelar edição
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-oliva mb-1">
+                    Código
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={printerCode}
+                    onChange={(e) => setPrinterCode(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs font-bold text-musgo"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[11px] font-bold uppercase text-oliva mb-1">
+                    Nome da Máquina no Atelier
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Bambu Lab A1 Combo #01"
+                    value={printerName}
+                    onChange={(e) => setPrinterName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs font-bold text-musgo"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-oliva mb-1">
+                    Marca
+                  </label>
+                  <input
+                    type="text"
+                    value={printerBrand}
+                    onChange={(e) => setPrinterBrand(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs text-musgo"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-oliva mb-1">
+                    Modelo
+                  </label>
+                  <input
+                    type="text"
+                    value={printerModel}
+                    onChange={(e) => setPrinterModel(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs text-musgo"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-oliva mb-1">
+                    Data Compra
+                  </label>
+                  <input
+                    type="date"
+                    value={printerPurchaseDate}
+                    onChange={(e) => setPrinterPurchaseDate(e.target.value)}
+                    className="w-full px-2.5 py-2 rounded-xl bg-linho border border-borda text-xs text-musgo"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-oliva mb-1">
+                    Valor Pago (R$)
+                  </label>
+                  <input
+                    type="number"
+                    min={100}
+                    step="50"
+                    required
+                    value={printerPrice}
+                    onChange={(e) => setPrinterPrice(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs font-bold text-musgo"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-oliva mb-1">
+                    Vida Útil (h)
+                  </label>
+                  <input
+                    type="number"
+                    min={500}
+                    step="500"
+                    required
+                    value={printerLifespanHours}
+                    onChange={(e) => setPrinterLifespanHours(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs font-bold text-musgo"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-oliva mb-1">
+                    Manutenção (%)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={printerMaintPercent}
+                    onChange={(e) => setPrinterMaintPercent(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs font-bold text-musgo"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-oliva mb-1">
+                    Potência (W)
+                  </label>
+                  <input
+                    type="number"
+                    min={30}
+                    max={1000}
+                    value={printerPowerWatts}
+                    onChange={(e) => setPrinterPowerWatts(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-linho border border-borda text-xs font-bold text-musgo"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-linho p-3.5 rounded-2xl border border-borda flex items-center justify-between">
+                <div className="text-xs text-oliva">
+                  Depreciação calculada ({printerPrice.toLocaleString("pt-BR")} ÷{" "}
+                  {printerLifespanHours}h):
+                </div>
+                <div className="text-lg font-serif font-bold text-terracota">
+                  R$ {previewPrinterHourlyCost.toFixed(2).replace(".", ",")}/hora
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 rounded-2xl bg-terracota hover:bg-terracota-hover text-white text-xs font-bold shadow-sm transition"
+              >
+                {editingPrinterId
+                  ? "Salvar Alterações da Impressora"
+                  : "+ Cadastrar Impressora no Atelier"}
+              </button>
+            </form>
+          </section>
+        )}
 
         {/* BLOCO 1: GERENCIADOR DE RECURSOS / INSUMOS DE ACABAMENTO (CHAVEIRO, GOTA DE SILICONE, ETC.) */}
         {(activeTab === "all" || activeTab === "accessories") && (

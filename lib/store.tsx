@@ -6,6 +6,7 @@ import {
   Filament,
   PaymentStatus,
   PixSettings,
+  Printer3D,
   PrintQueueOrder,
   Product,
   QueueStatus,
@@ -14,6 +15,7 @@ import {
   INITIAL_ACCESSORIES,
   INITIAL_FILAMENTS,
   INITIAL_ORDERS,
+  INITIAL_PRINTERS,
   INITIAL_PRODUCTS,
 } from "./seedData";
 import { buildSmartScheduleA1 } from "./queueScheduler";
@@ -21,6 +23,7 @@ import { calculate3DCosts } from "./costCalculator";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
 
 interface CMLabStoreContextValue {
+  printers: Printer3D[];
   filaments: Filament[];
   accessories: Accessory[];
   products: Product[];
@@ -43,6 +46,9 @@ interface CMLabStoreContextValue {
   updateOrderQueueStatus: (orderId: string, status: QueueStatus) => Promise<void>;
   markOrderMaterialReady: (orderId: string) => Promise<void>;
 
+  addOrUpdatePrinter: (printer: Printer3D) => Promise<void>;
+  deletePrinter: (printerId: string) => Promise<void>;
+
   addOrUpdateFilament: (filament: Filament) => Promise<void>;
   deleteFilament: (filamentId: string) => Promise<void>;
   restockFilament: (filamentId: string, addedGrams: number, newPrice?: number) => Promise<void>;
@@ -61,8 +67,14 @@ const CMLabStoreContext = createContext<CMLabStoreContextValue | null>(null);
 function recalculateProductsCost(
   currentProducts: Product[],
   currentFilaments: Filament[],
-  currentAccessories: Accessory[]
+  currentAccessories: Accessory[],
+  currentPrinters: Printer3D[] = INITIAL_PRINTERS
 ): Product[] {
+  const activePrinter =
+    currentPrinters.find((p) => p.active) || currentPrinters[0] || INITIAL_PRINTERS[0];
+  const machineHourCost = activePrinter?.hourly_depreciation_cost ?? 0.56;
+  const powerWatts = activePrinter?.average_power_watts ?? 150;
+
   return currentProducts.map((prod) => {
     const allowedFils = currentFilaments.filter((f) =>
       prod.allowed_filament_ids.includes(f.id)
@@ -83,6 +95,8 @@ function recalculateProductsCost(
     const breakdown = calculate3DCosts({
       filamentSegments: [{ weightGrams: prod.weight_grams, costPerGram: avgCostPerGram }],
       printTimeMinutes: prod.print_time_minutes,
+      a1AveragePowerWatts: powerWatts,
+      machineHourCostBrl: machineHourCost,
       accessories: accInputs,
       salePriceBrl: prod.price,
     });
@@ -132,10 +146,16 @@ function applySmartScheduleToOrders(allOrders: PrintQueueOrder[]): PrintQueueOrd
 }
 
 export function CMLabProvider({ children }: { children: React.ReactNode }) {
+  const [printers, setPrinters] = useState<Printer3D[]>(INITIAL_PRINTERS);
   const [filaments, setFilaments] = useState<Filament[]>(INITIAL_FILAMENTS);
   const [accessories, setAccessories] = useState<Accessory[]>(INITIAL_ACCESSORIES);
   const [products, setProducts] = useState<Product[]>(() =>
-    recalculateProductsCost(INITIAL_PRODUCTS, INITIAL_FILAMENTS, INITIAL_ACCESSORIES)
+    recalculateProductsCost(
+      INITIAL_PRODUCTS,
+      INITIAL_FILAMENTS,
+      INITIAL_ACCESSORIES,
+      INITIAL_PRINTERS
+    )
   );
   const [orders, setOrders] = useState<PrintQueueOrder[]>(() =>
     applySmartScheduleToOrders(INITIAL_ORDERS)
@@ -153,12 +173,19 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch("/api/state", { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
+      const loadedPrinters =
+        Array.isArray(data.printers) && data.printers.length > 0
+          ? data.printers
+          : INITIAL_PRINTERS;
       const loadedFils = data.filaments || INITIAL_FILAMENTS;
       const loadedAccs = data.accessories || INITIAL_ACCESSORIES;
       const loadedProds = data.products || INITIAL_PRODUCTS;
+      setPrinters(loadedPrinters);
       setFilaments(loadedFils);
       setAccessories(loadedAccs);
-      setProducts(recalculateProductsCost(loadedProds, loadedFils, loadedAccs));
+      setProducts(
+        recalculateProductsCost(loadedProds, loadedFils, loadedAccs, loadedPrinters)
+      );
       if (data.orders) setOrders(applySmartScheduleToOrders(data.orders));
       if (data.pixSettings) setPixSettings(data.pixSettings);
       setIsLoaded(true);
@@ -169,6 +196,7 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
 
   const persistState = useCallback(
     async (next: {
+      printers?: Printer3D[];
       filaments?: Filament[];
       accessories?: Accessory[];
       products?: Product[];
@@ -571,6 +599,52 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
     [products, persistState]
   );
 
+  const addOrUpdatePrinter = useCallback(
+    async (printer: Printer3D) => {
+      const lifespan = Math.max(100, printer.lifespan_hours || 8000);
+      const maintMult = 1 + (printer.maintenance_reserve_percent || 0) / 100;
+      const hourlyCost = Number(
+        ((printer.purchase_price * maintMult) / lifespan).toFixed(2)
+      );
+      const normalized: Printer3D = {
+        ...printer,
+        lifespan_hours: lifespan,
+        hourly_depreciation_cost: hourlyCost,
+      };
+      const exists = printers.some((p) => p.id === normalized.id);
+      const nextPrinters = exists
+        ? printers.map((p) => (p.id === normalized.id ? normalized : p))
+        : [...printers, normalized];
+      const nextProducts = recalculateProductsCost(
+        products,
+        filaments,
+        accessories,
+        nextPrinters
+      );
+      setPrinters(nextPrinters);
+      setProducts(nextProducts);
+      await persistState({ printers: nextPrinters, products: nextProducts });
+    },
+    [printers, products, filaments, accessories, persistState]
+  );
+
+  const deletePrinter = useCallback(
+    async (printerId: string) => {
+      if (printers.length <= 1) return; // Mantém pelo menos 1 impressora ativa no atelier
+      const nextPrinters = printers.filter((p) => p.id !== printerId);
+      const nextProducts = recalculateProductsCost(
+        products,
+        filaments,
+        accessories,
+        nextPrinters
+      );
+      setPrinters(nextPrinters);
+      setProducts(nextProducts);
+      await persistState({ printers: nextPrinters, products: nextProducts });
+    },
+    [printers, products, filaments, accessories, persistState]
+  );
+
   const updatePixSettings = useCallback(
     async (settings: PixSettings) => {
       setPixSettings(settings);
@@ -595,13 +669,16 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
     const recalcProds = recalculateProductsCost(
       INITIAL_PRODUCTS,
       INITIAL_FILAMENTS,
-      INITIAL_ACCESSORIES
+      INITIAL_ACCESSORIES,
+      INITIAL_PRINTERS
     );
+    setPrinters(INITIAL_PRINTERS);
     setFilaments(INITIAL_FILAMENTS);
     setAccessories(INITIAL_ACCESSORIES);
     setProducts(recalcProds);
     setOrders(initialScheduled);
     await persistState({
+      printers: INITIAL_PRINTERS,
       filaments: INITIAL_FILAMENTS,
       accessories: INITIAL_ACCESSORIES,
       products: recalcProds,
@@ -612,6 +689,7 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
   return (
     <CMLabStoreContext.Provider
       value={{
+        printers,
         filaments,
         accessories,
         products,
@@ -626,6 +704,8 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
         confirmOrderPayment,
         updateOrderQueueStatus,
         markOrderMaterialReady,
+        addOrUpdatePrinter,
+        deletePrinter,
         addOrUpdateFilament,
         deleteFilament,
         restockFilament,

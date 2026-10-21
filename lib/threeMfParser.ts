@@ -39,11 +39,11 @@ export function calculateScaled3DMetrics(params: {
     };
   }
 
-  // Expoente real empírico do Bambu Studio (2 paredes + 12~15% gyroid/grid infill)
-  const weightMultiplier = Math.pow(scaleFactor, 2.38);
-  const timeMultiplier = Math.pow(scaleFactor, 2.15);
+  // Expoente empírico calibrado com Bambu Studio (ex: 326g em 100% -> ~413g em +20% [120%])
+  const weightMultiplier = Math.pow(scaleFactor, 1.3);
+  const timeMultiplier = Math.pow(scaleFactor, 1.22);
   // Preço acompanha o crescimento de material/tempo com arredondamento comercial suave
-  const rawPrice = params.basePriceBrl * Math.pow(scaleFactor, 2.1);
+  const rawPrice = params.basePriceBrl * Math.pow(scaleFactor, 1.28);
 
   return {
     scaleFactor: Number(scaleFactor.toFixed(2)),

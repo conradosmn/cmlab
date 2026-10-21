@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { AdminNav } from "@/components/AdminNav";
 import { useCMLabStore } from "@/lib/store";
@@ -35,6 +35,7 @@ import {
   Star,
   ClipboardPaste,
   Maximize2,
+  Printer,
 } from "lucide-react";
 
 const DEMO_MAKERWORLD_PRESETS = [
@@ -75,6 +76,7 @@ const DEMO_MAKERWORLD_PRESETS = [
 
 export default function AdminCatalogoPage() {
   const {
+    printers,
     products,
     filaments,
     accessories,
@@ -128,15 +130,33 @@ export default function AdminCatalogoPage() {
   const [quickResPackPrice, setQuickResPackPrice] = useState(30);
   const [quickResPackQty, setQuickResPackQty] = useState(100);
 
-  // Parâmetros de Engenharia de Custos da A1
+  // Impressora selecionada e Parâmetros de Engenharia de Custos da A1
+  const [selectedPrinterId, setSelectedPrinterId] = useState<string>("");
+  const activePrinter = useMemo(
+    () =>
+      printers.find((p) => p.id === selectedPrinterId) ||
+      printers.find((p) => p.active) ||
+      printers[0],
+    [printers, selectedPrinterId]
+  );
+
   const [powerWatts, setPowerWatts] = useState<number>(150);
   const [kwhTariff, setKwhTariff] = useState<number>(0.95);
-  const [machineHourCost, setMachineHourCost] = useState<number>(0.45); // R$ 3.500 / 8.000h = ~R$ 0,44/h
+  const [machineHourCost, setMachineHourCost] = useState<number>(0.56); // R$ 4.500 / 8.000h = R$ 0,56/h
   const [manualLaborMinutes, setManualLaborMinutes] = useState<number>(10);
   const [manualLaborHourlyRate, setManualLaborHourlyRate] = useState<number>(20);
   const [failureMarginPercent, setFailureMarginPercent] = useState<number>(8);
   const [desiredMarkupPercent, setDesiredMarkupPercent] = useState<number>(120);
   const [mpFeePercent, setMpFeePercent] = useState<number>(3.19);
+
+  // Sincroniza potência e custo-hora quando a impressora cadastrada carrega ou muda
+  useEffect(() => {
+    if (activePrinter) {
+      if (!selectedPrinterId) setSelectedPrinterId(activePrinter.id);
+      setPowerWatts(activePrinter.average_power_watts || 150);
+      setMachineHourCost(activePrinter.hourly_depreciation_cost || 0.56);
+    }
+  }, [activePrinter, selectedPrinterId]);
 
   // Detalhamento linha a linha dos recursos selecionados para exibir na Calculadora de Custos
   const selectedResourceDetails = useMemo(() => {
@@ -1172,6 +1192,42 @@ export default function AdminCatalogoPage() {
                 </div>
               </div>
 
+              {/* Seletor da Impressora Cadastrada no Atelier */}
+              <div className="bg-linho p-3 rounded-2xl border border-borda space-y-1.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-musgo flex items-center gap-1.5">
+                    <Printer className="w-3.5 h-3.5 text-terracota" />
+                    <span>Impressora Base do Cálculo:</span>
+                  </span>
+                  <Link
+                    href="/admin/insumos"
+                    className="text-terracota underline font-semibold"
+                  >
+                    Gerenciar Máquinas →
+                  </Link>
+                </div>
+                <select
+                  value={activePrinter?.id || ""}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setSelectedPrinterId(id);
+                    const found = printers.find((p) => p.id === id);
+                    if (found) {
+                      setPowerWatts(found.average_power_watts);
+                      setMachineHourCost(found.hourly_depreciation_cost);
+                    }
+                  }}
+                  className="w-full px-3 py-2 rounded-xl bg-areia border border-borda text-xs font-bold text-musgo"
+                >
+                  {printers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} — R$ {p.purchase_price.toFixed(0)} ÷ {p.lifespan_hours}h = R${" "}
+                      {p.hourly_depreciation_cost.toFixed(2).replace(".", ",")}/h ({p.average_power_watts}W)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Parâmetros Ajustáveis (Máquina, Energia, Mão de Obra e Falha) */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
                 <div className="bg-linho p-2.5 rounded-xl border border-borda">
@@ -1443,6 +1499,22 @@ export default function AdminCatalogoPage() {
                     </span>
                   </div>
                 </div>
+
+                {costBreakdown.netProfit > 0 && activePrinter && (
+                  <div className="p-2.5 rounded-xl bg-areia border border-borda text-center text-xs text-musgo">
+                    💡 Com esse lucro líquido, cerca de{" "}
+                    <strong className="text-terracota">
+                      {Math.ceil(activePrinter.purchase_price / costBreakdown.netProfit)}{" "}
+                      peças
+                    </strong>{" "}
+                    pagam a sua{" "}
+                    <strong>
+                      {activePrinter.name} (R${" "}
+                      {activePrinter.purchase_price.toLocaleString("pt-BR")})
+                    </strong>
+                    .
+                  </div>
+                )}
               </div>
             </div>
 
