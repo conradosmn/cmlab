@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useCMLabStore } from "@/lib/store";
@@ -12,6 +12,7 @@ import {
 } from "@/lib/types";
 import { KeychainSimulatorModal } from "@/components/KeychainSimulatorModal";
 import { CheckoutModal } from "@/components/CheckoutModal";
+import { KioskPortraitFrameModal } from "@/components/KioskPortraitFrameModal";
 import {
   Sparkles,
   Clock,
@@ -22,7 +23,10 @@ import {
   Palette,
   ChevronLeft,
   ChevronRight,
+  Frame,
 } from "lucide-react";
+
+const KIOSK_IDLE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutos ocioso -> Modo Porta-Retrato
 
 const CATEGORY_TABS: { id: "all" | ProductCategory; label: string }[] = [
   { id: "all", label: "Coleção Completa" },
@@ -39,6 +43,7 @@ export default function FeiraKioskPage() {
   const [activeImageIdxMap, setActiveImageIdxMap] = useState<Record<string, number>>({});
   const [isKeychainModalOpen, setIsKeychainModalOpen] = useState(false);
   const [checkoutProduct, setCheckoutProduct] = useState<Product | null>(null);
+  const [isPortraitModeOpen, setIsPortraitModeOpen] = useState(false);
   const [preconfiguredKeychain, setPreconfiguredKeychain] = useState<{
     customKeychainData: CustomKeychainData;
     selectedColors: SelectedColorChoice[];
@@ -48,6 +53,51 @@ export default function FeiraKioskPage() {
     materialReady: boolean;
     restockBufferDays: number;
   } | null>(null);
+
+  // Monitora ociosidade do Kiosk (3 minutos sem toque/movimento -> ativa Modo Porta-Retrato)
+  useEffect(() => {
+    if (isPortraitModeOpen) return;
+
+    let idleTimer: ReturnType<typeof setTimeout>;
+
+    const resetIdleTimer = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        setIsPortraitModeOpen(true);
+      }, KIOSK_IDLE_TIMEOUT_MS);
+    };
+
+    const events: (keyof WindowEventMap)[] = [
+      "pointerdown",
+      "pointermove",
+      "touchstart",
+      "touchmove",
+      "keydown",
+      "wheel",
+      "scroll",
+      "click",
+    ];
+
+    events.forEach((evt) =>
+      window.addEventListener(evt, resetIdleTimer, { passive: true })
+    );
+    resetIdleTimer();
+
+    return () => {
+      clearTimeout(idleTimer);
+      events.forEach((evt) => window.removeEventListener(evt, resetIdleTimer));
+    };
+  }, [isPortraitModeOpen]);
+
+  const handleSelectProductFromPortrait = useCallback((product: Product) => {
+    setIsPortraitModeOpen(false);
+    if (product.is_custom_keychain) {
+      setIsKeychainModalOpen(true);
+    } else {
+      setPreconfiguredKeychain(null);
+      setCheckoutProduct(product);
+    }
+  }, []);
 
   const visibleProducts = useMemo(() => {
     return products.filter(
@@ -116,6 +166,16 @@ export default function FeiraKioskPage() {
                 </strong>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setIsPortraitModeOpen(true)}
+              title="Ativar Modo Porta-Retrato (entra automaticamente após 3 min ocioso)"
+              className="p-2.5 rounded-xl bg-linho hover:bg-borda/40 border border-borda text-oliva hover:text-musgo transition flex items-center gap-1.5 text-xs font-medium"
+            >
+              <Frame className="w-4 h-4 text-terracota" />
+              <span className="hidden md:inline">Porta-Retrato</span>
+            </button>
 
             <Link
               href="/admin/caixa"
@@ -406,6 +466,16 @@ export default function FeiraKioskPage() {
         product={checkoutProduct}
         filaments={filaments}
         preconfiguredKeychain={preconfiguredKeychain}
+      />
+
+      {/* Modal 3: Modo Porta-Retrato (Descanso de Tela Kiosk após 3 min ocioso) */}
+      <KioskPortraitFrameModal
+        isOpen={isPortraitModeOpen}
+        onDismiss={() => setIsPortraitModeOpen(false)}
+        onSelectProduct={handleSelectProductFromPortrait}
+        products={products}
+        filaments={filaments}
+        formattedNextSlot={formattedNextSlot}
       />
     </div>
   );

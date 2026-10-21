@@ -43,6 +43,12 @@ export const metadata: Metadata = {
   title: "CM Casa Criativa | Atelier & Feira TCE (Bambu Lab A1)",
   description:
     "Sistema Kiosk de Encomendas para iPad, Simulador de Chaveiros 2.5D, ERP de Custos, Estoque de Filamentos e Agendador Inteligente Bambu Lab A1.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "CM Kiosk",
+  },
 };
 
 export default function RootLayout({

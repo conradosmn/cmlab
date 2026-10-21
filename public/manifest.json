@@ -1,0 +1,17 @@
+{
+  "name": "CM Casa Criativa — Kiosk Feira TCE",
+  "short_name": "CM Kiosk",
+  "description": "Catálogo Interativo e Simulador 3D CM Casa Criativa",
+  "start_url": "/feira",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F9F6F0",
+  "theme_color": "#4A4F3B",
+  "icons": [
+    {
+      "src": "/logo-cm-casa-criativa.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
