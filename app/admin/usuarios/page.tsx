@@ -68,6 +68,12 @@ export default function AdminUsuariosPage() {
 
   const previewDefaultPassword = buildDefaultPasswordFromFullName(fullName);
 
+  const isAdminRole =
+    !currentAdminUser ||
+    currentAdminUser.is_master ||
+    currentAdminUser.username.toLowerCase() === "conradosmn" ||
+    currentAdminUser.role === "admin";
+
   const resetForm = () => {
     setEditingId(null);
     setFullName("");
@@ -154,6 +160,36 @@ export default function AdminUsuariosPage() {
     );
     resetForm();
   };
+
+  if (!isAdminRole) {
+    return (
+      <div className="min-h-screen bg-linho flex flex-col">
+        <AdminNav />
+        <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-16">
+          <div className="bg-areia border border-borda rounded-3xl p-8 shadow-atelier text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-terracota/15 text-terracota flex items-center justify-center mx-auto">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <h1 className="text-2xl font-serif font-bold text-musgo">
+              Gerenciamento de Usuários Restrito ao Admin
+            </h1>
+            <p className="text-sm text-oliva max-w-md mx-auto">
+              Apenas usuários com perfil <strong>Admin</strong> podem cadastrar, editar
+              ou alterar perfis de acesso no sistema.
+            </p>
+            <div className="pt-2">
+              <a
+                href="/admin/catalogo"
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-terracota hover:bg-terracota-hover text-white text-sm font-semibold shadow-sm transition"
+              >
+                Voltar para o Catálogo
+              </a>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-linho flex flex-col">

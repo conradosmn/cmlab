@@ -63,6 +63,11 @@ export default function HomePage() {
   const lowStockCount = filaments.filter(
     (f) => f.is_on_order_color || f.remaining_weight_grams < 150
   ).length;
+  const isAdminRole =
+    !currentAdminUser ||
+    currentAdminUser.is_master ||
+    currentAdminUser.username.toLowerCase() === "conradosmn" ||
+    currentAdminUser.role === "admin";
 
   return (
     <div className="min-h-screen bg-linho flex flex-col justify-between">
@@ -302,61 +307,65 @@ export default function HomePage() {
             </div>
           </Link>
 
-          {/* 5. /admin/insumos */}
-          <Link
-            href="/admin/insumos"
-            className="group bg-areia hover:bg-areia/70 border border-borda hover:border-argila rounded-3xl p-6 shadow-atelier transition flex flex-col justify-between"
-          >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="p-3 rounded-2xl bg-musgo text-linho">
-                  <PackageSearch className="w-6 h-6" />
-                </span>
-                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-terracota/15 text-terracota">
-                  Lista de Compras Ativa
-                </span>
+          {/* 5. /admin/insumos (Restrito Admin) */}
+          {isAdminRole && (
+            <Link
+              href="/admin/insumos"
+              className="group bg-areia hover:bg-areia/70 border border-borda hover:border-argila rounded-3xl p-6 shadow-atelier transition flex flex-col justify-between"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="p-3 rounded-2xl bg-musgo text-linho">
+                    <PackageSearch className="w-6 h-6" />
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-terracota/15 text-terracota">
+                    Exclusivo Admin
+                  </span>
+                </div>
+                <h2 className="text-2xl font-serif font-bold text-musgo">
+                  5. Insumos (/admin/insumos)
+                </h2>
+                <p className="text-xs text-oliva leading-relaxed">
+                  Controle de bobinas de filamento, pacotes de acessórios, frota de impressoras 3D
+                  e alerta automático de compras financiado pelos pedidos pagos na feira.
+                </p>
               </div>
-              <h2 className="text-2xl font-serif font-bold text-musgo">
-                5. Insumos (/admin/insumos)
-              </h2>
-              <p className="text-xs text-oliva leading-relaxed">
-                Controle de bobinas de filamento, pacotes de acessórios, frota de impressoras 3D
-                e alerta automático de compras financiado pelos pedidos pagos na feira.
-              </p>
-            </div>
-            <div className="mt-6 pt-4 border-t border-borda flex items-center justify-between text-xs font-semibold text-musgo">
-              <span>Gerenciar Bobinas, Insumos & Frota</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </Link>
+              <div className="mt-6 pt-4 border-t border-borda flex items-center justify-between text-xs font-semibold text-musgo">
+                <span>Gerenciar Bobinas, Insumos & Frota</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </Link>
+          )}
 
-          {/* 6. /admin/usuarios */}
-          <Link
-            href="/admin/usuarios"
-            className="group bg-areia hover:bg-areia/70 border border-borda hover:border-argila rounded-3xl p-6 shadow-atelier transition flex flex-col justify-between"
-          >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="p-3 rounded-2xl bg-musgo text-linho">
-                  <Users className="w-6 h-6" />
-                </span>
-                <span className="px-3 py-1 rounded-full text-xs font-medium bg-linho text-oliva border border-borda">
-                  Login & Equipe Admin
-                </span>
+          {/* 6. /admin/usuarios (Restrito Admin) */}
+          {isAdminRole && (
+            <Link
+              href="/admin/usuarios"
+              className="group bg-areia hover:bg-areia/70 border border-borda hover:border-argila rounded-3xl p-6 shadow-atelier transition flex flex-col justify-between"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="p-3 rounded-2xl bg-musgo text-linho">
+                    <Users className="w-6 h-6" />
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-linho text-oliva border border-borda">
+                    Exclusivo Admin
+                  </span>
+                </div>
+                <h2 className="text-2xl font-serif font-bold text-musgo">
+                  6. Usuários & Acesso Admin (/admin/usuarios)
+                </h2>
+                <p className="text-xs text-oliva leading-relaxed">
+                  Gerencie os usuários com acesso ao painel administrativo (nome completo, e-mail,
+                  telefone e senha). A vitrine Kiosk (/feira) permanece aberta para os clientes.
+                </p>
               </div>
-              <h2 className="text-2xl font-serif font-bold text-musgo">
-                6. Usuários & Acesso Admin (/admin/usuarios)
-              </h2>
-              <p className="text-xs text-oliva leading-relaxed">
-                Gerencie os usuários com acesso ao painel administrativo (nome completo, e-mail,
-                telefone e senha). A vitrine Kiosk (/feira) permanece aberta para os clientes.
-              </p>
-            </div>
-            <div className="mt-6 pt-4 border-t border-borda flex items-center justify-between text-xs font-semibold text-musgo">
-              <span>Gerenciar Usuários Admin</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </Link>
+              <div className="mt-6 pt-4 border-t border-borda flex items-center justify-between text-xs font-semibold text-musgo">
+                <span>Gerenciar Usuários Admin</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </Link>
+          )}
         </div>
       </main>
 
