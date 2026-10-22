@@ -50,7 +50,7 @@ export function AdminNav() {
   const links = [
     {
       href: "/admin/caixa",
-      label: "Caixa Mobile (Tap to Pay)",
+      label: "Caixa Mobile",
       icon: Smartphone,
       badge: awaitingTapCount > 0 ? awaitingTapCount : undefined,
       badgeUrgent: true,
@@ -85,26 +85,29 @@ export function AdminNav() {
 
   return (
     <header className="sticky top-0 z-30 bg-areia/95 backdrop-blur border-b border-borda">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap lg:flex-nowrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <Link href="/">
             <BrandLogo size="sm" showSubtitle={false} />
           </Link>
-          <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-linho text-oliva border border-borda">
+          <span
+            title={
+              isSupabaseConfigured
+                ? "Supabase Cloud + Realtime Ativo"
+                : "Modo Local • Feira TCE"
+            }
+            className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-linho text-oliva border border-borda whitespace-nowrap"
+          >
             <span
-              className={`w-2 h-2 rounded-full ${
+              className={`w-2 h-2 rounded-full shrink-0 ${
                 isSupabaseConfigured ? "bg-emerald-600" : "bg-argila"
               }`}
             />
-            <span>
-              {isSupabaseConfigured
-                ? "Supabase Cloud + Realtime Ativo"
-                : "Modo Local • Feira TCE"}
-            </span>
+            <span>{isSupabaseConfigured ? "Cloud Ativo" : "Modo Local"}</span>
           </span>
         </div>
 
-        <nav className="flex items-center gap-1.5 overflow-x-auto py-1">
+        <nav className="flex items-center gap-1 overflow-x-auto py-1">
           {links.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;
@@ -112,7 +115,7 @@ export function AdminNav() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+                className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                   active
                     ? "bg-musgo text-linho shadow-sm"
                     : "text-musgo hover:bg-linho/80 border border-transparent hover:border-borda"
@@ -138,13 +141,13 @@ export function AdminNav() {
           })}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Link
             href="/feira"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-terracota hover:bg-terracota-hover text-white transition shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-terracota hover:bg-terracota-hover text-white transition shadow-sm whitespace-nowrap"
           >
-            <Tablet className="w-3.5 h-3.5" />
-            <span>Kiosk iPad (/feira)</span>
+            <Tablet className="w-3.5 h-3.5 shrink-0" />
+            <span>Kiosk iPad</span>
           </Link>
           <button
             onClick={() => {
@@ -153,7 +156,7 @@ export function AdminNav() {
               }
             }}
             title="Restaurar dados iniciais de demonstração"
-            className="p-2 rounded-xl text-oliva hover:text-musgo hover:bg-linho border border-borda transition"
+            className="p-2 rounded-xl text-oliva hover:text-musgo hover:bg-linho border border-borda transition shrink-0"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -161,9 +164,9 @@ export function AdminNav() {
             <button
               onClick={logoutAdmin}
               title={`Sair da conta (${currentAdminUser.username})`}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-oliva hover:text-red-700 hover:bg-linho border border-borda transition"
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-semibold text-oliva hover:text-red-700 hover:bg-linho border border-borda transition whitespace-nowrap shrink-0"
             >
-              <LogOut className="w-3.5 h-3.5" />
+              <LogOut className="w-3.5 h-3.5 shrink-0" />
               <span className="hidden sm:inline">Sair</span>
             </button>
           )}
