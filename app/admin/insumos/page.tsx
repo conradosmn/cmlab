@@ -246,6 +246,7 @@ export default function AdminInsumosPage() {
   const [colorName, setColorName] = useState("");
   const [hexCode, setHexCode] = useState("#A3522B");
   const [colorInputMode, setColorInputMode] = useState<"hex" | "rgb" | "cmyk">("hex");
+  const [isColorModalOpen, setIsColorModalOpen] = useState(false);
   const [hexTextInput, setHexTextInput] = useState("#A3522B");
   const [rgbInput, setRgbInput] = useState({ r: 163, g: 82, b: 43 });
   const [cmykInput, setCmykInput] = useState({ c: 0, m: 50, y: 74, k: 36 });
@@ -1587,208 +1588,196 @@ export default function AdminInsumosPage() {
                   />
                 </div>
 
-                {/* Seletor Multi-Formato de Cor da Bobina: HEX, RGB e CMYK */}
-                <div className="p-3 rounded-2xl bg-linho border border-borda space-y-2.5">
+                {/* Seletor Multi-Formato de Cor da Bobina: HEX, RGB e CMYK (Todos Visíveis + Janela Própria sem travar na janela do Windows) */}
+                <div className="p-3.5 rounded-2xl bg-linho border-2 border-argila/60 space-y-3">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-oliva">
-                      Cor da Bobina ({hexCode})
-                    </span>
-                    <div className="flex items-center gap-1 bg-areia p-0.5 rounded-xl border border-borda">
-                      {(["hex", "rgb", "cmyk"] as const).map((mode) => (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsColorModalOpen(true)}
+                        title="Clique para abrir o Seletor Completo de Cor (HEX, RGB e CMYK)"
+                        className="w-10 h-10 rounded-xl border-2 border-white shadow-sm ring-1 ring-borda cursor-pointer shrink-0 transition transform hover:scale-105"
+                        style={{ backgroundColor: hexCode }}
+                      />
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-musgo block">
+                          Cor da Bobina ({hexCode})
+                        </span>
                         <button
-                          key={mode}
                           type="button"
-                          onClick={() => setColorInputMode(mode)}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition ${
-                            colorInputMode === mode
-                              ? "bg-musgo text-linho shadow-sm"
-                              : "text-oliva hover:text-musgo"
-                          }`}
+                          onClick={() => setIsColorModalOpen(true)}
+                          className="text-[11px] text-terracota underline font-semibold"
                         >
-                          {mode}
+                          Abrir janela de cor (HEX / RGB / CMYK)
                         </button>
-                      ))}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2.5">
-                    {/* Seletor visual de cor + Amostra ao vivo */}
+                  {/* 1. Campo HEX direto */}
+                  <div>
+                    <label className="block text-[10px] text-oliva font-bold uppercase mb-1">
+                      Código HEX (Digite ou Cole)
+                    </label>
                     <input
-                      type="color"
-                      value={hexCode}
-                      onChange={(e) => syncAllColorFormatsFromHex(e.target.value)}
-                      title="Clique para abrir a paleta visual"
-                      className="w-11 h-10 rounded-xl bg-areia border border-borda cursor-pointer shrink-0 p-0.5"
+                      type="text"
+                      value={hexTextInput}
+                      maxLength={7}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setHexTextInput(val);
+                        const clean = val.replace(/[^0-9a-fA-F]/g, "");
+                        if (clean.length === 6) {
+                          syncAllColorFormatsFromHex(clean);
+                        }
+                      }}
+                      placeholder="#A3522B"
+                      className="w-full px-3 py-2 rounded-xl bg-areia border border-borda text-xs font-mono font-bold text-musgo uppercase"
                     />
-
-                    {/* Modo 1: Digitar/Colar HEX direto */}
-                    {colorInputMode === "hex" && (
-                      <div className="flex-1">
-                        <input
-                          type="text"
-                          value={hexTextInput}
-                          maxLength={7}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setHexTextInput(val);
-                            const clean = val.replace(/[^0-9a-fA-F]/g, "");
-                            if (clean.length === 6) {
-                              syncAllColorFormatsFromHex(clean);
-                            }
-                          }}
-                          placeholder="#A3522B"
-                          className="w-full px-3 py-2 rounded-xl bg-areia border border-borda text-xs font-mono font-bold text-musgo uppercase"
-                        />
-                      </div>
-                    )}
-
-                    {/* Modo 2: Digitar R, G, B (0-255) */}
-                    {colorInputMode === "rgb" && (
-                      <div className="flex-1 grid grid-cols-3 gap-1.5">
-                        <div>
-                          <span className="block text-[9px] text-oliva font-bold uppercase mb-0.5">
-                            R
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={255}
-                            value={rgbInput.r}
-                            onChange={(e) =>
-                              updateColorFromRgb({
-                                ...rgbInput,
-                                r: Number(e.target.value),
-                              })
-                            }
-                            className="w-full px-2 py-1.5 rounded-lg bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
-                          />
-                        </div>
-                        <div>
-                          <span className="block text-[9px] text-oliva font-bold uppercase mb-0.5">
-                            G
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={255}
-                            value={rgbInput.g}
-                            onChange={(e) =>
-                              updateColorFromRgb({
-                                ...rgbInput,
-                                g: Number(e.target.value),
-                              })
-                            }
-                            className="w-full px-2 py-1.5 rounded-lg bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
-                          />
-                        </div>
-                        <div>
-                          <span className="block text-[9px] text-oliva font-bold uppercase mb-0.5">
-                            B
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={255}
-                            value={rgbInput.b}
-                            onChange={(e) =>
-                              updateColorFromRgb({
-                                ...rgbInput,
-                                b: Number(e.target.value),
-                              })
-                            }
-                            className="w-full px-2 py-1.5 rounded-lg bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Modo 3: Digitar C, M, Y, K (0-100%) */}
-                    {colorInputMode === "cmyk" && (
-                      <div className="flex-1 grid grid-cols-4 gap-1">
-                        <div>
-                          <span className="block text-[9px] text-oliva font-bold uppercase mb-0.5">
-                            C%
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={cmykInput.c}
-                            onChange={(e) =>
-                              updateColorFromCmyk({
-                                ...cmykInput,
-                                c: Number(e.target.value),
-                              })
-                            }
-                            className="w-full px-1.5 py-1.5 rounded-lg bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
-                          />
-                        </div>
-                        <div>
-                          <span className="block text-[9px] text-oliva font-bold uppercase mb-0.5">
-                            M%
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={cmykInput.m}
-                            onChange={(e) =>
-                              updateColorFromCmyk({
-                                ...cmykInput,
-                                m: Number(e.target.value),
-                              })
-                            }
-                            className="w-full px-1.5 py-1.5 rounded-lg bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
-                          />
-                        </div>
-                        <div>
-                          <span className="block text-[9px] text-oliva font-bold uppercase mb-0.5">
-                            Y%
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={cmykInput.y}
-                            onChange={(e) =>
-                              updateColorFromCmyk({
-                                ...cmykInput,
-                                y: Number(e.target.value),
-                              })
-                            }
-                            className="w-full px-1.5 py-1.5 rounded-lg bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
-                          />
-                        </div>
-                        <div>
-                          <span className="block text-[9px] text-oliva font-bold uppercase mb-0.5">
-                            K%
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={cmykInput.k}
-                            onChange={(e) =>
-                              updateColorFromCmyk({
-                                ...cmykInput,
-                                k: Number(e.target.value),
-                              })
-                            }
-                            className="w-full px-1.5 py-1.5 rounded-lg bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
-                          />
-                        </div>
-                      </div>
-                    )}
                   </div>
 
-                  <div className="text-[10px] text-oliva flex items-center justify-between pt-0.5">
-                    <span>HEX: {hexCode}</span>
-                    <span>
-                      RGB({rgbInput.r}, {rgbInput.g}, {rgbInput.b})
-                    </span>
-                    <span>
-                      CMYK({cmykInput.c}%, {cmykInput.m}%, {cmykInput.y}%, {cmykInput.k}%)
-                    </span>
+                  {/* 2. Campos RGB (0 a 255) */}
+                  <div>
+                    <label className="block text-[10px] text-oliva font-bold uppercase mb-1">
+                      RGB (0 a 255)
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div>
+                        <span className="block text-[9px] text-oliva font-bold uppercase mb-0.5">
+                          R (Vermelho)
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={255}
+                          value={rgbInput.r}
+                          onChange={(e) =>
+                            updateColorFromRgb({
+                              ...rgbInput,
+                              r: Number(e.target.value),
+                            })
+                          }
+                          className="w-full px-2 py-1.5 rounded-lg bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
+                        />
+                      </div>
+                      <div>
+                        <span className="block text-[9px] text-oliva font-bold uppercase mb-0.5">
+                          G (Verde)
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={255}
+                          value={rgbInput.g}
+                          onChange={(e) =>
+                            updateColorFromRgb({
+                              ...rgbInput,
+                              g: Number(e.target.value),
+                            })
+                          }
+                          className="w-full px-2 py-1.5 rounded-lg bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
+                        />
+                      </div>
+                      <div>
+                        <span className="block text-[9px] text-oliva font-bold uppercase mb-0.5">
+                          B (Azul)
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={255}
+                          value={rgbInput.b}
+                          onChange={(e) =>
+                            updateColorFromRgb({
+                              ...rgbInput,
+                              b: Number(e.target.value),
+                            })
+                          }
+                          className="w-full px-2 py-1.5 rounded-lg bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Campos CMYK (0 a 100%) */}
+                  <div>
+                    <label className="block text-[10px] text-oliva font-bold uppercase mb-1">
+                      CMYK (0 a 100%)
+                    </label>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      <div>
+                        <span className="block text-[9px] text-oliva font-bold uppercase mb-0.5">
+                          C%
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={cmykInput.c}
+                          onChange={(e) =>
+                            updateColorFromCmyk({
+                              ...cmykInput,
+                              c: Number(e.target.value),
+                            })
+                          }
+                          className="w-full px-1.5 py-1.5 rounded-lg bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
+                        />
+                      </div>
+                      <div>
+                        <span className="block text-[9px] text-oliva font-bold uppercase mb-0.5">
+                          M%
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={cmykInput.m}
+                          onChange={(e) =>
+                            updateColorFromCmyk({
+                              ...cmykInput,
+                              m: Number(e.target.value),
+                            })
+                          }
+                          className="w-full px-1.5 py-1.5 rounded-lg bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
+                        />
+                      </div>
+                      <div>
+                        <span className="block text-[9px] text-oliva font-bold uppercase mb-0.5">
+                          Y%
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={cmykInput.y}
+                          onChange={(e) =>
+                            updateColorFromCmyk({
+                              ...cmykInput,
+                              y: Number(e.target.value),
+                            })
+                          }
+                          className="w-full px-1.5 py-1.5 rounded-lg bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
+                        />
+                      </div>
+                      <div>
+                        <span className="block text-[9px] text-oliva font-bold uppercase mb-0.5">
+                          K%
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={cmykInput.k}
+                          onChange={(e) =>
+                            updateColorFromCmyk({
+                              ...cmykInput,
+                              k: Number(e.target.value),
+                            })
+                          }
+                          className="w-full px-1.5 py-1.5 rounded-lg bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1875,6 +1864,270 @@ export default function AdminInsumosPage() {
               </button>
             </form>
           </section>
+        )}
+
+        {/* Modal Próprio de Seleção de Cor CMLab (Substitui a janela antiga do Windows e aceita HEX, RGB e CMYK) */}
+        {isColorModalOpen && (
+          <div className="fixed inset-0 z-50 bg-musgo/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-areia border border-borda rounded-3xl max-w-lg w-full p-6 shadow-atelier-lg space-y-4">
+              <div className="flex items-center justify-between border-b border-borda pb-3">
+                <div className="flex items-center gap-3">
+                  <span
+                    className="w-9 h-9 rounded-xl border-2 border-white shadow ring-1 ring-borda shrink-0"
+                    style={{ backgroundColor: hexCode }}
+                  />
+                  <div>
+                    <h3 className="text-lg font-serif font-bold text-musgo">
+                      Selecionar Cor do Filamento
+                    </h3>
+                    <p className="text-[11px] text-oliva">
+                      Digite em HEX, RGB ou CMYK, ou clique em uma cor da paleta abaixo
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsColorModalOpen(false)}
+                  className="px-3 py-1.5 rounded-xl bg-linho hover:bg-borda/50 text-xs font-semibold text-musgo"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              {/* Paleta Rápida de Cores de Filamento 3D */}
+              <div>
+                <span className="block text-[10px] font-bold uppercase text-oliva mb-1.5">
+                  Paleta de Filamentos 3D (Clique para escolher):
+                </span>
+                <div className="grid grid-cols-8 gap-2">
+                  {[
+                    { hex: "#FFFFFF", name: "Branco Gesso" },
+                    { hex: "#F5EFE6", name: "Areia / Marfim" },
+                    { hex: "#D2B48C", name: "Bege / Madeira" },
+                    { hex: "#A3522B", name: "Terracota" },
+                    { hex: "#C86D51", name: "Argila" },
+                    { hex: "#8B4513", name: "Marrom Café" },
+                    { hex: "#D4AF37", name: "Dourado Silk" },
+                    { hex: "#C0C0C0", name: "Prata Silk" },
+                    { hex: "#B87333", name: "Cobre Silk" },
+                    { hex: "#E11D48", name: "Vermelho Rubi" },
+                    { hex: "#F97316", name: "Laranja" },
+                    { hex: "#EAB308", name: "Amarelo Sol" },
+                    { hex: "#8F9779", name: "Verde Sálvia" },
+                    { hex: "#2C3527", name: "Verde Musgo" },
+                    { hex: "#10B981", name: "Verde Esmeralda" },
+                    { hex: "#06B6D4", name: "Azul Turquesa" },
+                    { hex: "#2563EB", name: "Azul Royal" },
+                    { hex: "#1E293B", name: "Azul Marinho" },
+                    { hex: "#8B5CF6", name: "Roxo Lavanda" },
+                    { hex: "#EC4899", name: "Rosa Pink" },
+                    { hex: "#F472B6", name: "Rosa Bebê" },
+                    { hex: "#9CA3AF", name: "Cinza Prata" },
+                    { hex: "#4B5563", name: "Cinza Grafite" },
+                    { hex: "#111827", name: "Preto Ônix" },
+                  ].map((sw) => (
+                    <button
+                      key={sw.hex}
+                      type="button"
+                      title={`${sw.name} (${sw.hex})`}
+                      onClick={() => syncAllColorFormatsFromHex(sw.hex)}
+                      className={`h-8 rounded-xl border-2 transition transform hover:scale-105 ${
+                        hexCode.toUpperCase() === sw.hex
+                          ? "border-terracota ring-2 ring-terracota/40 scale-105"
+                          : "border-white shadow-sm ring-1 ring-borda"
+                      }`}
+                      style={{ backgroundColor: sw.hex }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* 1. Campo HEX */}
+              <div className="bg-linho p-3 rounded-2xl border border-borda space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase text-musgo">
+                    1. Código HEX
+                  </label>
+                  <label className="text-[11px] text-terracota underline font-semibold cursor-pointer flex items-center gap-1">
+                    <span>Abrir espectro livre</span>
+                    <input
+                      type="color"
+                      value={hexCode}
+                      onChange={(e) => syncAllColorFormatsFromHex(e.target.value)}
+                      className="sr-only"
+                    />
+                  </label>
+                </div>
+                <input
+                  type="text"
+                  value={hexTextInput}
+                  maxLength={7}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setHexTextInput(val);
+                    const clean = val.replace(/[^0-9a-fA-F]/g, "");
+                    if (clean.length === 6) {
+                      syncAllColorFormatsFromHex(clean);
+                    }
+                  }}
+                  placeholder="#A3522B"
+                  className="w-full px-3.5 py-2 rounded-xl bg-areia border border-borda text-sm font-mono font-bold text-musgo uppercase"
+                />
+              </div>
+
+              {/* 2. Campos RGB */}
+              <div className="bg-linho p-3 rounded-2xl border border-borda space-y-2">
+                <label className="block text-xs font-bold uppercase text-musgo">
+                  2. Código RGB (0 a 255)
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <span className="block text-[10px] text-oliva font-bold mb-0.5">
+                      R (Vermelho)
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={255}
+                      value={rgbInput.r}
+                      onChange={(e) =>
+                        updateColorFromRgb({
+                          ...rgbInput,
+                          r: Number(e.target.value),
+                        })
+                      }
+                      className="w-full px-2.5 py-2 rounded-xl bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-oliva font-bold mb-0.5">
+                      G (Verde)
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={255}
+                      value={rgbInput.g}
+                      onChange={(e) =>
+                        updateColorFromRgb({
+                          ...rgbInput,
+                          g: Number(e.target.value),
+                        })
+                      }
+                      className="w-full px-2.5 py-2 rounded-xl bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-oliva font-bold mb-0.5">
+                      B (Azul)
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={255}
+                      value={rgbInput.b}
+                      onChange={(e) =>
+                        updateColorFromRgb({
+                          ...rgbInput,
+                          b: Number(e.target.value),
+                        })
+                      }
+                      className="w-full px-2.5 py-2 rounded-xl bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Campos CMYK */}
+              <div className="bg-linho p-3 rounded-2xl border border-borda space-y-2">
+                <label className="block text-xs font-bold uppercase text-musgo">
+                  3. Código CMYK (0% a 100%)
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  <div>
+                    <span className="block text-[10px] text-oliva font-bold mb-0.5">
+                      C (Ciano %)
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={cmykInput.c}
+                      onChange={(e) =>
+                        updateColorFromCmyk({
+                          ...cmykInput,
+                          c: Number(e.target.value),
+                        })
+                      }
+                      className="w-full px-2 py-2 rounded-xl bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-oliva font-bold mb-0.5">
+                      M (Magenta %)
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={cmykInput.m}
+                      onChange={(e) =>
+                        updateColorFromCmyk({
+                          ...cmykInput,
+                          m: Number(e.target.value),
+                        })
+                      }
+                      className="w-full px-2 py-2 rounded-xl bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-oliva font-bold mb-0.5">
+                      Y (Amarelo %)
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={cmykInput.y}
+                      onChange={(e) =>
+                        updateColorFromCmyk({
+                          ...cmykInput,
+                          y: Number(e.target.value),
+                        })
+                      }
+                      className="w-full px-2 py-2 rounded-xl bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-oliva font-bold mb-0.5">
+                      K (Preto %)
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={cmykInput.k}
+                      onChange={(e) =>
+                        updateColorFromCmyk({
+                          ...cmykInput,
+                          k: Number(e.target.value),
+                        })
+                      }
+                      className="w-full px-2 py-2 rounded-xl bg-areia border border-borda text-xs font-mono font-bold text-musgo text-center"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsColorModalOpen(false)}
+                className="w-full py-3 rounded-2xl bg-terracota hover:bg-terracota-hover text-white text-sm font-semibold shadow-sm transition"
+              >
+                Confirmar Cor ({hexCode})
+              </button>
+            </div>
+          </div>
         )}
       </main>
     </div>
