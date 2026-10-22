@@ -76,6 +76,7 @@ const DEMO_MAKERWORLD_PRESETS = [
 
 export default function AdminCatalogoPage() {
   const {
+    currentAdminUser,
     printers,
     products,
     filaments,
@@ -86,6 +87,13 @@ export default function AdminCatalogoPage() {
     deleteProduct,
     clearDemoOrdersAndProducts,
   } = useCMLabStore();
+
+  const currentUserRole =
+    currentAdminUser?.is_master ||
+    currentAdminUser?.username?.toLowerCase() === "conradosmn"
+      ? "admin"
+      : currentAdminUser?.role || "gerente";
+  const isAdminRole = !currentAdminUser || currentUserRole === "admin";
 
   const [makerworldUrl, setMakerworldUrl] = useState("");
   const [importLoading, setImportLoading] = useState(false);
@@ -508,10 +516,7 @@ export default function AdminCatalogoPage() {
       print_time_minutes: Number(printTimeMinutes),
       weight_grams: Number(weightGrams),
       max_colors: Number(maxColors),
-      allowed_filament_ids:
-        allowedFilamentIds.length > 0
-          ? allowedFilamentIds
-          : filaments.slice(0, 3).map((f) => f.id),
+      allowed_filament_ids: allowedFilamentIds,
       accessories: selectedAccessories.filter((a) => a.quantity > 0),
       production_cost: costBreakdown.totalProductionCost,
       price: Number(salePrice),
@@ -525,9 +530,11 @@ export default function AdminCatalogoPage() {
     setEditingId(null);
     setImportMessage({
       type: "success",
-      text: `Produto "${productPayload.name}" salvo com ${validImages.length} foto(s) e custo calculado de R$ ${costBreakdown.totalProductionCost
-        .toFixed(2)
-        .replace(".", ",")}!`,
+      text: isAdminRole
+        ? `Produto "${productPayload.name}" salvo com ${validImages.length} foto(s) e custo calculado de R$ ${costBreakdown.totalProductionCost
+            .toFixed(2)
+            .replace(".", ",")}!`
+        : `Produto "${productPayload.name}" salvo no catálogo com ${validImages.length} foto(s)!`,
     });
   };
 
@@ -663,14 +670,26 @@ export default function AdminCatalogoPage() {
           onSubmit={handleSaveProduct}
           className="grid grid-cols-1 lg:grid-cols-12 gap-6"
         >
-          {/* Coluna Esquerda (7 cols): Produto, Filamentos e Composição de Recursos (Chaveiro, Gota Silicone, etc.) */}
-          <div className="lg:col-span-7 bg-areia border border-borda rounded-3xl p-6 shadow-atelier space-y-5">
-            <div className="flex items-center justify-between border-b border-borda pb-3">
-              <h2 className="text-xl font-serif font-bold text-musgo">
-                {editingId
-                  ? "Editando Peça & Recursos do Produto"
-                  : "Configurar Peça & Recursos no Catálogo"}
-              </h2>
+          {/* Coluna Esquerda: Produto, Galeria de Fotos e Filamentos */}
+          <div
+            className={`${
+              isAdminRole ? "lg:col-span-7" : "lg:col-span-12"
+            } bg-areia border border-borda rounded-3xl p-6 shadow-atelier space-y-5`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-borda pb-3">
+              <div>
+                <h2 className="text-xl font-serif font-bold text-musgo">
+                  {editingId
+                    ? "Editando Peça do Catálogo"
+                    : "Cadastrar Peça no Catálogo"}
+                </h2>
+                {!isAdminRole && (
+                  <p className="text-xs text-oliva mt-0.5">
+                    Perfil Gerente: cadastre/edite dados da peça, galeria de fotos, nome,
+                    descrição e cores de filamento (custos restritos ao Admin).
+                  </p>
+                )}
+              </div>
               {editingId && (
                 <button
                   type="button"
@@ -988,11 +1007,35 @@ export default function AdminCatalogoPage() {
             </div>
 
             {/* Seleção de Cores de Filamento */}
-            <div>
-              <label className="block text-xs font-semibold uppercase text-oliva mb-2 flex items-center gap-1.5">
-                <Palette className="w-4 h-4 text-terracota" />
-                <span>Filamentos Permitidos para o Cliente Escolher no iPad</span>
-              </label>
+            <div className="bg-linho p-4 rounded-2xl border border-borda space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="text-xs font-semibold uppercase text-oliva flex items-center gap-1.5">
+                  <Palette className="w-4 h-4 text-terracota" />
+                  <span>Cor do Filamento (ou deixe sem marcar p/ escolha na reserva)</span>
+                </label>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setAllowedFilamentIds([])}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                      allowedFilamentIds.length === 0
+                        ? "bg-terracota text-white border-terracota shadow-sm"
+                        : "bg-areia text-musgo border-borda hover:border-terracota"
+                    }`}
+                  >
+                    Não marcar cor nenhuma (Cliente escolhe na reserva)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAllowedFilamentIds(filaments.map((f) => f.id))}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-medium bg-areia text-oliva hover:text-musgo border border-borda transition"
+                  >
+                    Marcar todas
+                  </button>
+                </div>
+              </div>
+
               <div className="flex flex-wrap gap-2">
                 {filaments.map((fil) => {
                   const active = allowedFilamentIds.includes(fil.id);
@@ -1004,7 +1047,7 @@ export default function AdminCatalogoPage() {
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
                         active
                           ? "bg-musgo text-linho border-musgo shadow-sm"
-                          : "bg-linho text-musgo border-borda opacity-70 hover:opacity-100"
+                          : "bg-areia text-musgo border-borda opacity-75 hover:opacity-100"
                       }`}
                     >
                       <span
@@ -1017,9 +1060,36 @@ export default function AdminCatalogoPage() {
                   );
                 })}
               </div>
+
+              <div className="text-[11px] text-oliva pt-0.5">
+                {allowedFilamentIds.length === 0 ? (
+                  <span className="text-terracota font-semibold">
+                    ✓ Nenhuma cor fixada: o cliente escolherá a cor de sua preferência no ato da reserva no iPad.
+                  </span>
+                ) : (
+                  <span>
+                    {allowedFilamentIds.length} cor(es) marcada(s) para esta peça. Clique novamente nas cores ou no botão acima se preferir não marcar nenhuma.
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* COMPOSIÇÃO DE RECURSOS DA PEÇA (CHAVEIRO, GOTA DE SILICONE, ÍMÃ, KIT LED) */}
+            {!isAdminRole && (
+              <button
+                type="submit"
+                className="w-full py-4 rounded-2xl bg-terracota hover:bg-terracota-hover text-white font-semibold text-base shadow-md transition flex items-center justify-center gap-2"
+              >
+                <Plus className="w-5 h-5" />
+                <span>
+                  {editingId
+                    ? "Salvar Alterações da Peça no Catálogo"
+                    : "Publicar Peça no Catálogo"}
+                </span>
+              </button>
+            )}
+
+            {/* COMPOSIÇÃO DE RECURSOS DA PEÇA (EXCLUSIVO ADMIN CUSTOS) */}
+            {isAdminRole && (
             <div className="bg-linho p-4 rounded-2xl border-2 border-argila/60 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
@@ -1175,9 +1245,11 @@ export default function AdminCatalogoPage() {
                 })}
               </div>
             </div>
+            )}
           </div>
 
-          {/* Coluna Direita (5 cols): Calculadora de Engenharia de Custos 3D com Detalhamento de Recursos */}
+          {/* Coluna Direita (5 cols): Calculadora de Engenharia de Custos 3D (Exclusivo Admin) */}
+          {isAdminRole && (
           <div className="lg:col-span-5 bg-areia border border-borda rounded-3xl p-6 shadow-atelier flex flex-col justify-between space-y-5">
             <div className="space-y-4">
               <div className="flex items-center gap-2.5 border-b border-borda pb-3">
@@ -1530,13 +1602,16 @@ export default function AdminCatalogoPage() {
               </span>
             </button>
           </div>
+          )}
         </form>
 
-        {/* Lista de Produtos Atuais no Catálogo mostrando os Recursos que entram no Custo */}
+        {/* Lista de Produtos Atuais no Catálogo */}
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-2xl font-serif font-bold text-musgo">
-              Peças Publicadas no Catálogo & Composição de Custos ({products.length})
+              {isAdminRole
+                ? `Peças Publicadas no Catálogo & Custos (${products.length})`
+                : `Peças Publicadas no Catálogo (${products.length})`}
             </h2>
             <button
               type="button"
@@ -1582,17 +1657,30 @@ export default function AdminCatalogoPage() {
                           {p.name}
                         </div>
                         <div className="text-xs text-oliva">
-                          {p.weight_grams}g • {p.print_time_minutes} min •{" "}
-                          <strong className="text-musgo">
-                            Custo: R$ {p.production_cost.toFixed(2).replace(".", ",")}
-                          </strong>
+                          {p.weight_grams}g • {p.print_time_minutes} min
+                          {isAdminRole && (
+                            <>
+                              {" • "}
+                              <strong className="text-musgo">
+                                Custo: R$ {p.production_cost.toFixed(2).replace(".", ",")}
+                              </strong>
+                            </>
+                          )}
                         </div>
-                        <div className="text-sm font-bold text-terracota mt-0.5">
-                          Venda Feira: R$ {p.price.toFixed(2).replace(".", ",")}
-                        </div>
+                        {isAdminRole && (
+                          <div className="text-sm font-bold text-terracota mt-0.5">
+                            Venda Feira: R$ {p.price.toFixed(2).replace(".", ",")}
+                          </div>
+                        )}
                         <div className="text-[11px] text-oliva font-medium mt-0.5">
                           Estoque pronta-entrega:{" "}
                           <strong className="text-musgo">{p.ready_stock_qty} un.</strong>
+                          {" • "}
+                          <span className="text-terracota font-semibold">
+                            {p.allowed_filament_ids?.length > 0
+                              ? `${p.allowed_filament_ids.length} cor(es)`
+                              : "Cliente escolhe a cor na reserva"}
+                          </span>
                         </div>
                       </div>
                     </div>

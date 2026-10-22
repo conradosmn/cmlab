@@ -416,7 +416,11 @@ export default function FeiraKioskPage() {
                     {/* Amostras de Filamento Disponíveis para esta Peça */}
                     <div>
                       <div className="text-[11px] text-oliva font-medium mb-1.5 flex items-center justify-between">
-                        <span>Cores disponíveis sob encomenda:</span>
+                        <span>
+                          {product.allowed_filament_ids?.length > 0
+                            ? "Cores disponíveis sob encomenda:"
+                            : "Escolha a cor no ato da reserva:"}
+                        </span>
                         {product.max_colors > 1 && (
                           <span className="inline-flex items-center gap-1 text-musgo font-semibold">
                             <Layers className="w-3 h-3 text-terracota" />

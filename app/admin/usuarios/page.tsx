@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { AdminNav } from "@/components/AdminNav";
 import { useCMLabStore } from "@/lib/store";
-import { AdminUser } from "@/lib/types";
+import { AdminUser, AdminUserRole } from "@/lib/types";
 import {
   Users,
   UserPlus,
@@ -44,6 +44,12 @@ function formatBrazilPhone(raw: string): string {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
 }
 
+const ROLE_LABELS: Record<AdminUserRole, string> = {
+  admin: "Admin (Acesso Total & Custos)",
+  gerente: "Gerente (Catálogo, Fotos & Estoque)",
+  vendedor: "Vendedor (Caixa & Pedidos)",
+};
+
 export default function AdminUsuariosPage() {
   const {
     adminUsers,
@@ -57,6 +63,7 @@ export default function AdminUsuariosPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [username, setUsername] = useState("");
+  const [role, setRole] = useState<AdminUserRole>("gerente");
   const [feedback, setFeedback] = useState<string>("");
 
   const previewDefaultPassword = buildDefaultPasswordFromFullName(fullName);
@@ -67,6 +74,7 @@ export default function AdminUsuariosPage() {
     setEmail("");
     setPhone("");
     setUsername("");
+    setRole("gerente");
   };
 
   const handleEditUser = (u: AdminUser) => {
@@ -75,6 +83,11 @@ export default function AdminUsuariosPage() {
     setEmail(u.email);
     setPhone(formatBrazilPhone(u.phone));
     setUsername(u.username);
+    setRole(
+      u.is_master || u.username === "conradosmn"
+        ? "admin"
+        : u.role || "gerente"
+    );
     setFeedback("");
   };
 
@@ -116,15 +129,19 @@ export default function AdminUsuariosPage() {
       : undefined;
 
     const generatedDefaultPassword = buildDefaultPasswordFromFullName(fullName);
+    const isMaster = Boolean(
+      existing?.is_master || existing?.username === "conradosmn"
+    );
 
     const payload: AdminUser = {
       id: editingId || `usr-${Date.now()}`,
-      username: existing?.is_master ? "conradosmn" : derivedUsername,
+      username: isMaster ? "conradosmn" : derivedUsername,
       email: email.trim(),
       password: existing ? existing.password : generatedDefaultPassword,
       full_name: fullName.trim(),
       phone: formatBrazilPhone(phone),
-      is_master: existing?.is_master || false,
+      role: isMaster ? "admin" : role,
+      is_master: isMaster,
       must_change_password: existing ? existing.must_change_password : true,
       created_at: existing?.created_at || new Date().toISOString(),
     };
@@ -132,8 +149,8 @@ export default function AdminUsuariosPage() {
     await addOrUpdateAdminUser(payload);
     setFeedback(
       editingId
-        ? `Dados de "${payload.full_name}" atualizados com sucesso!`
-        : `Usuário "${payload.full_name}" cadastrado! Senha inicial: ${generatedDefaultPassword} (troca no 1º login).`
+        ? `Dados e perfil de "${payload.full_name}" atualizados com sucesso!`
+        : `Usuário "${payload.full_name}" (${payload.role?.toUpperCase()}) cadastrado! Senha inicial: ${generatedDefaultPassword}.`
     );
     resetForm();
   };
@@ -147,10 +164,10 @@ export default function AdminUsuariosPage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <span className="text-xs uppercase tracking-widest text-terracota font-bold">
-              Controle de Acesso Administrativo
+              Controle de Acesso & Perfis
             </span>
             <h1 className="text-3xl font-serif font-bold text-musgo mt-0.5">
-              Usuários do Painel Admin
+              Usuários & Perfis (Admin, Gerente, Vendedor)
             </h1>
             <p className="text-xs sm:text-sm text-oliva mt-1">
               Novos usuários recebem automaticamente a senha padrão{" "}
@@ -163,7 +180,9 @@ export default function AdminUsuariosPage() {
             <div className="bg-areia px-4 py-2.5 rounded-2xl border border-borda text-xs flex items-center gap-2.5">
               <ShieldCheck className="w-4 h-4 text-terracota" />
               <div>
-                <span className="text-oliva block leading-none">Logado como:</span>
+                <span className="text-oliva block leading-none">
+                  Logado como ({currentAdminUser.role || "admin"}):
+                </span>
                 <strong className="text-musgo">
                   {currentAdminUser.full_name} ({currentAdminUser.username})
                 </strong>
@@ -214,10 +233,49 @@ export default function AdminUsuariosPage() {
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Ex: Maria Clara Sampaio"
+                  placeholder="Ex: Lorena Eulálio Nunes"
                   className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-linho border border-borda text-sm text-musgo focus:outline-none focus:ring-2 focus:ring-argila"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-oliva mb-1">
+                Perfil de Acesso *
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["vendedor", "gerente", "admin"] as AdminUserRole[]).map(
+                  (r) => {
+                    const active = role === r;
+                    const disabled = Boolean(
+                      editingId &&
+                        adminUsers.find((u) => u.id === editingId)?.is_master
+                    );
+                    return (
+                      <button
+                        key={r}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => setRole(r)}
+                        className={`py-2.5 px-3 rounded-xl text-xs font-bold uppercase border transition ${
+                          active
+                            ? "bg-musgo text-linho border-musgo shadow-sm"
+                            : "bg-linho text-musgo border-borda hover:border-argila"
+                        } disabled:opacity-60`}
+                      >
+                        {r === "admin"
+                          ? "Admin"
+                          : r === "gerente"
+                          ? "Gerente"
+                          : "Vendedor"}
+                      </button>
+                    );
+                  }
+                )}
+              </div>
+              <p className="text-[11px] text-oliva mt-1">
+                {ROLE_LABELS[role]}
+              </p>
             </div>
 
             <div>
@@ -231,7 +289,7 @@ export default function AdminUsuariosPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Ex: maria@email.com"
+                  placeholder="Ex: lorenaeulalio@gmail.com"
                   className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-linho border border-borda text-sm text-musgo focus:outline-none focus:ring-2 focus:ring-argila"
                 />
               </div>
@@ -297,7 +355,7 @@ export default function AdminUsuariosPage() {
             >
               <UserPlus className="w-4 h-4" />
               <span>
-                {editingId ? "Salvar Alterações" : "Cadastrar Usuário Admin"}
+                {editingId ? "Salvar Alterações" : "Cadastrar Usuário"}
               </span>
             </button>
           </form>
@@ -318,6 +376,11 @@ export default function AdminUsuariosPage() {
                 const defaultPassForUser = buildDefaultPasswordFromFullName(
                   u.full_name
                 );
+                const userRole: AdminUserRole =
+                  u.is_master || u.username === "conradosmn"
+                    ? "admin"
+                    : u.role || "gerente";
+
                 return (
                   <div
                     key={u.id}
@@ -331,19 +394,31 @@ export default function AdminUsuariosPage() {
                         <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-areia border border-borda text-musgo">
                           @{u.username}
                         </span>
-                        {u.is_master ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-terracota text-white">
-                            Admin Principal
-                          </span>
-                        ) : u.must_change_password ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-argila/25 text-terracota border border-argila/50">
-                            1º Acesso Pendente ({u.password})
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-600/15 text-emerald-800">
-                            Senha Pessoal Ativa
-                          </span>
-                        )}
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase ${
+                            userRole === "admin"
+                              ? "bg-terracota text-white"
+                              : userRole === "gerente"
+                              ? "bg-musgo text-linho"
+                              : "bg-areia border border-borda text-musgo"
+                          }`}
+                        >
+                          {userRole === "admin"
+                            ? "Admin"
+                            : userRole === "gerente"
+                            ? "Gerente"
+                            : "Vendedor"}
+                        </span>
+                        {!u.is_master &&
+                          (u.must_change_password ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-argila/25 text-terracota border border-argila/50">
+                              1º Acesso ({u.password})
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-600/15 text-emerald-800">
+                              Senha Pessoal Ativa
+                            </span>
+                          ))}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-4 text-xs text-oliva">
@@ -360,6 +435,24 @@ export default function AdminUsuariosPage() {
 
                     <div className="flex items-center gap-2 shrink-0 flex-wrap">
                       {!u.is_master && u.username !== "conradosmn" && (
+                        <select
+                          value={userRole}
+                          onChange={(e) =>
+                            addOrUpdateAdminUser({
+                              ...u,
+                              role: e.target.value as AdminUserRole,
+                            })
+                          }
+                          className="px-2.5 py-2 rounded-xl bg-areia border border-borda text-xs font-bold text-musgo"
+                          title="Alterar perfil de acesso"
+                        >
+                          <option value="vendedor">Perfil: Vendedor</option>
+                          <option value="gerente">Perfil: Gerente</option>
+                          <option value="admin">Perfil: Admin</option>
+                        </select>
+                      )}
+
+                      {!u.is_master && u.username !== "conradosmn" && (
                         <button
                           type="button"
                           onClick={() => handleResetUserPasswordToDefault(u)}
@@ -367,7 +460,7 @@ export default function AdminUsuariosPage() {
                           className="px-2.5 py-2 rounded-xl bg-areia hover:bg-borda/50 border border-borda text-xs font-medium text-oliva hover:text-musgo flex items-center gap-1 transition"
                         >
                           <RotateCcw className="w-3.5 h-3.5 text-terracota" />
-                          <span>Resetar ({defaultPassForUser})</span>
+                          <span>Resetar</span>
                         </button>
                       )}
 

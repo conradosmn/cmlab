@@ -132,6 +132,8 @@ export interface PixSettings {
   merchantCity: string;
 }
 
+export type AdminUserRole = "admin" | "gerente" | "vendedor";
+
 export interface AdminUser {
   id: string;
   username: string;
@@ -139,6 +141,7 @@ export interface AdminUser {
   password: string;
   full_name: string;
   phone: string;
+  role?: AdminUserRole;
   is_master?: boolean;
   must_change_password?: boolean;
   created_at: string;

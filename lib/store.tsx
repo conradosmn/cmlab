@@ -74,6 +74,32 @@ interface CMLabStoreContextValue {
 
 const CMLabStoreContext = createContext<CMLabStoreContextValue | null>(null);
 
+function normalizeAdminUsersList(list: AdminUser[]): AdminUser[] {
+  const merged = [...list];
+  for (const seedUser of INITIAL_ADMIN_USERS) {
+    const exists = merged.some(
+      (u) => u.username?.toLowerCase() === seedUser.username.toLowerCase()
+    );
+    if (!exists) {
+      if (seedUser.is_master) {
+        merged.unshift(seedUser);
+      } else {
+        merged.push(seedUser);
+      }
+    }
+  }
+  return merged.map((u) => {
+    const isMaster = u.is_master || u.username?.toLowerCase() === "conradosmn";
+    if (isMaster) {
+      return { ...u, is_master: true, role: "admin" };
+    }
+    return {
+      ...u,
+      role: u.role || "gerente",
+    };
+  });
+}
+
 function recalculateProductsCost(
   currentProducts: Product[],
   currentFilaments: Filament[],
@@ -156,7 +182,9 @@ function applySmartScheduleToOrders(allOrders: PrintQueueOrder[]): PrintQueueOrd
 }
 
 export function CMLabProvider({ children }: { children: React.ReactNode }) {
-  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(INITIAL_ADMIN_USERS);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(() =>
+    normalizeAdminUsersList(INITIAL_ADMIN_USERS)
+  );
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(null);
   const [printers, setPrinters] = useState<Printer3D[]>(INITIAL_PRINTERS);
   const [filaments, setFilaments] = useState<Filament[]>(INITIAL_FILAMENTS);
@@ -188,14 +216,19 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
       if (savedSession) {
         const parsed = JSON.parse(savedSession);
         if (parsed && parsed.username) {
-          setCurrentAdminUser(parsed);
+          const isMaster =
+            parsed.is_master || parsed.username.toLowerCase() === "conradosmn";
+          setCurrentAdminUser({
+            ...parsed,
+            role: isMaster ? "admin" : parsed.role || "gerente",
+          });
         }
       }
       const savedUsersBackup = localStorage.getItem("cmlab_admin_users_backup");
       if (savedUsersBackup) {
         const parsedUsers = JSON.parse(savedUsersBackup);
         if (Array.isArray(parsedUsers) && parsedUsers.length > 0) {
-          setAdminUsers(parsedUsers);
+          setAdminUsers(normalizeAdminUsersList(parsedUsers));
         }
       }
     } catch {
@@ -209,12 +242,70 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) return;
       const data = await res.json();
       if (Array.isArray(data.adminUsers) && data.adminUsers.length > 0) {
-        setAdminUsers(data.adminUsers);
+        let serverList: AdminUser[] = [...data.adminUsers];
+        let hadUnsyncedLocalUsers = false;
+
+        if (typeof window !== "undefined") {
+          try {
+            const rawLocal = localStorage.getItem("cmlab_admin_users_backup");
+            if (rawLocal) {
+              const localUsers: AdminUser[] = JSON.parse(rawLocal);
+              if (Array.isArray(localUsers)) {
+                for (const lu of localUsers) {
+                  if (
+                    lu?.username &&
+                    !serverList.some(
+                      (su) =>
+                        su.username?.toLowerCase() === lu.username.toLowerCase()
+                    )
+                  ) {
+                    serverList.push({
+                      ...lu,
+                      role: lu.role || "gerente",
+                    });
+                    hadUnsyncedLocalUsers = true;
+                  }
+                }
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        const normalizedUsers = normalizeAdminUsersList(serverList);
+        setAdminUsers(normalizedUsers);
+
         if (typeof window !== "undefined") {
           localStorage.setItem(
             "cmlab_admin_users_backup",
-            JSON.stringify(data.adminUsers)
+            JSON.stringify(normalizedUsers)
           );
+          const savedSession = localStorage.getItem("cmlab_admin_session");
+          if (savedSession) {
+            try {
+              const sess = JSON.parse(savedSession);
+              const matched = normalizedUsers.find(
+                (u) =>
+                  u.id === sess?.id ||
+                  u.username?.toLowerCase() === sess?.username?.toLowerCase()
+              );
+              if (matched) {
+                setCurrentAdminUser(matched);
+                localStorage.setItem("cmlab_admin_session", JSON.stringify(matched));
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
+
+        if (hadUnsyncedLocalUsers) {
+          fetch("/api/state", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ adminUsers: normalizedUsers }),
+          }).catch(() => {});
         }
       }
       const loadedPrinters =
@@ -708,9 +799,18 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
         return false;
       });
       if (found) {
-        setCurrentAdminUser(found);
+        const isMaster =
+          found.is_master || found.username.toLowerCase() === "conradosmn";
+        const normalizedFound: AdminUser = {
+          ...found,
+          role: isMaster ? "admin" : found.role || "gerente",
+        };
+        setCurrentAdminUser(normalizedFound);
         if (typeof window !== "undefined") {
-          localStorage.setItem("cmlab_admin_session", JSON.stringify(found));
+          localStorage.setItem(
+            "cmlab_admin_session",
+            JSON.stringify(normalizedFound)
+          );
         }
         return true;
       }
@@ -729,9 +829,11 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
   const addOrUpdateAdminUser = useCallback(
     async (user: AdminUser) => {
       const exists = adminUsers.some((u) => u.id === user.id);
-      const nextUsers = exists
-        ? adminUsers.map((u) => (u.id === user.id ? user : u))
-        : [...adminUsers, user];
+      const nextUsers = normalizeAdminUsersList(
+        exists
+          ? adminUsers.map((u) => (u.id === user.id ? user : u))
+          : [...adminUsers, user]
+      );
       setAdminUsers(nextUsers);
       if (typeof window !== "undefined") {
         localStorage.setItem("cmlab_admin_users_backup", JSON.stringify(nextUsers));

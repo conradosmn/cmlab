@@ -57,7 +57,7 @@ export function AdminNav() {
     },
     {
       href: "/admin/catalogo",
-      label: "Catálogo & Custos A1",
+      label: "Catálogo",
       icon: Sparkles,
     },
     {

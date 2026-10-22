@@ -17,14 +17,29 @@ const SYS_CONFIG_ACC_ID = "__cmlab_system_config__";
 
 function ensureMasterAdmin(users: any[] | undefined) {
   const list = Array.isArray(users) ? [...users] : [];
-  const master = INITIAL_ADMIN_USERS[0];
-  const exists = list.some(
-    (u) => u.username?.toLowerCase() === master.username.toLowerCase()
-  );
-  if (!exists) {
-    list.unshift(master);
+  for (const seedUser of INITIAL_ADMIN_USERS) {
+    const exists = list.some(
+      (u) => u.username?.toLowerCase() === seedUser.username.toLowerCase()
+    );
+    if (!exists) {
+      if (seedUser.is_master) {
+        list.unshift(seedUser);
+      } else {
+        list.push(seedUser);
+      }
+    }
   }
-  return list;
+  return list.map((u) => {
+    const isMaster =
+      u.is_master || u.username?.toLowerCase() === "conradosmn";
+    if (isMaster) {
+      return { ...u, is_master: true, role: "admin" };
+    }
+    return {
+      ...u,
+      role: u.role || "gerente",
+    };
+  });
 }
 
 function readLocalDb() {

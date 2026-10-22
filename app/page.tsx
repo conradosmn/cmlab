@@ -289,15 +289,15 @@ export default function HomePage() {
                 </span>
               </div>
               <h2 className="text-2xl font-serif font-bold text-musgo">
-                4. Catálogo & Custos 3D (/admin/catalogo)
+                4. Catálogo (/admin/catalogo)
               </h2>
               <p className="text-xs text-oliva leading-relaxed">
-                Importador de links do MakerWorld (filtro exclusivo Bambu Lab A1) ou arquivo .3mf,
-                com calculadora de engenharia de custos (energia 120W, depreciação, acessórios e taxa MP).
+                Cadastro de peças 3D, galeria de fotos, escolha de filamentos e importador
+                MakerWorld / .3mf (engenharia de custos exclusiva para Admin).
               </p>
             </div>
             <div className="mt-6 pt-4 border-t border-borda flex items-center justify-between text-xs font-semibold text-musgo">
-              <span>Gerenciar Produtos & Custos</span>
+              <span>Abrir Catálogo</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </div>
           </Link>

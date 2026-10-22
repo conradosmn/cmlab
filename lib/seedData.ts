@@ -15,9 +15,22 @@ export const INITIAL_ADMIN_USERS: AdminUser[] = [
     password: "CSmn1886@",
     full_name: "Conrado de Sampaio Machado Neto",
     phone: "(86) 99999-9999",
+    role: "admin",
     is_master: true,
     must_change_password: false,
     created_at: "2026-10-20T00:00:00.000Z",
+  },
+  {
+    id: "usr-lorena-eulalio",
+    username: "lorenaeulalio",
+    email: "lorenaeulalio@gmail.com",
+    password: "lorena@12345",
+    full_name: "Lorena Eulálio Nunes",
+    phone: "(86) 98146-5710",
+    role: "gerente",
+    is_master: false,
+    must_change_password: true,
+    created_at: "2026-10-21T21:45:00.000Z",
   },
 ];
 
