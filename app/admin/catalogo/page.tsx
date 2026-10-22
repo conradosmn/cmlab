@@ -101,6 +101,14 @@ export default function AdminCatalogoPage() {
     type: "info" | "error" | "success";
     text: string;
   } | null>(null);
+  const [publishedConfirmation, setPublishedConfirmation] = useState<{
+    name: string;
+    image?: string;
+    weightGrams: number;
+    printTimeMinutes: number;
+    price: number;
+    wasUpdate: boolean;
+  } | null>(null);
 
   // Estados do Produto + Recursos Vinculados (Chaveiro, Gota de Silicone, etc.)
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -545,8 +553,17 @@ export default function AdminCatalogoPage() {
       active: true,
     };
 
+    const wasUpdate = Boolean(editingId);
     await addOrUpdateProduct(productPayload);
     resetCatalogForm();
+    setPublishedConfirmation({
+      name: productPayload.name,
+      image: validImages[0],
+      weightGrams: productPayload.weight_grams,
+      printTimeMinutes: productPayload.print_time_minutes,
+      price: productPayload.price,
+      wasUpdate,
+    });
     setImportMessage({
       type: "success",
       text: isAdminRole
@@ -1767,6 +1784,68 @@ export default function AdminCatalogoPage() {
             })}
           </div>
         </section>
+
+        {/* Modal de Confirmação ao Publicar / Atualizar Peça */}
+        {publishedConfirmation && (
+          <div
+            onClick={() => setPublishedConfirmation(null)}
+            className="fixed inset-0 z-50 bg-musgo/60 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-areia border-2 border-musgo rounded-3xl max-w-md w-full p-6 shadow-atelier-lg text-center space-y-4 animate-in fade-in zoom-in-95 duration-200"
+            >
+              <div className="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-md">
+                <Check className="w-8 h-8 stroke-[2.5]" />
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-xs font-bold uppercase tracking-widest text-emerald-700">
+                  {publishedConfirmation.wasUpdate
+                    ? "Catálogo Atualizado"
+                    : "Peça Adicionada com Sucesso!"}
+                </span>
+                <h3 className="text-2xl font-serif font-bold text-musgo">
+                  {publishedConfirmation.name}
+                </h3>
+                <p className="text-xs text-oliva">
+                  {publishedConfirmation.weightGrams}g •{" "}
+                  {publishedConfirmation.printTimeMinutes} min
+                  {isAdminRole &&
+                    ` • R$ ${publishedConfirmation.price
+                      .toFixed(2)
+                      .replace(".", ",")}`}
+                </p>
+              </div>
+
+              {publishedConfirmation.image && (
+                <div className="w-28 h-28 rounded-2xl overflow-hidden border-2 border-borda mx-auto shadow-sm bg-linho">
+                  <img
+                    src={publishedConfirmation.image}
+                    alt={publishedConfirmation.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+
+              <p className="text-xs text-oliva">
+                A peça já está disponível na vitrine do iPad e os campos foram limpos
+                para o próximo cadastro.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setPublishedConfirmation(null);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="w-full py-3.5 rounded-2xl bg-musgo hover:bg-musgo/90 text-linho font-semibold text-sm shadow-md transition"
+              >
+                OK • Cadastrar Próxima Peça
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
