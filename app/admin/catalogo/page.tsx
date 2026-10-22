@@ -1487,25 +1487,36 @@ export default function AdminCatalogoPage() {
 
               {/* Simulador de Margem sobre o Custo + Preço Sugerido Automático */}
               <div className="bg-linho p-4 rounded-2xl border border-borda space-y-2.5">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-musgo">
                     Margem de Lucro Sobre o Custo (Markup)
                   </span>
-                  <span className="text-sm font-bold text-terracota">
-                    {desiredMarkupPercent}%
-                  </span>
+                  <div className="flex items-center gap-1 bg-areia px-2.5 py-1 rounded-xl border border-borda">
+                    <input
+                      type="number"
+                      min={0}
+                      max={1000}
+                      step={1}
+                      value={desiredMarkupPercent}
+                      onChange={(e) =>
+                        setDesiredMarkupPercent(Math.max(0, Number(e.target.value) || 0))
+                      }
+                      className="w-14 bg-transparent text-right text-sm font-bold text-terracota focus:outline-none"
+                    />
+                    <span className="text-xs font-bold text-terracota">%</span>
+                  </div>
                 </div>
                 <input
                   type="range"
-                  min={30}
-                  max={250}
-                  step={5}
-                  value={desiredMarkupPercent}
+                  min={0}
+                  max={300}
+                  step={1}
+                  value={Math.min(300, desiredMarkupPercent)}
                   onChange={(e) => setDesiredMarkupPercent(Number(e.target.value))}
                   className="w-full accent-terracota cursor-pointer"
                 />
                 <div className="flex flex-wrap gap-1">
-                  {[60, 100, 120, 150, 200].map((mk) => (
+                  {[60, 100, 120, 150, 180, 200].map((mk) => (
                     <button
                       key={mk}
                       type="button"
@@ -1521,7 +1532,7 @@ export default function AdminCatalogoPage() {
                   ))}
                 </div>
 
-                <div className="pt-2 border-t border-borda flex items-center justify-between gap-2">
+                <div className="pt-2 border-t border-borda flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="text-[10px] uppercase font-bold text-oliva">
                       Preço Sugerido ({desiredMarkupPercent}% lucro + taxa)
@@ -1551,25 +1562,33 @@ export default function AdminCatalogoPage() {
                 </div>
               </div>
 
-              {/* Preço de Venda Feira e Lucro Líquido */}
+              {/* Preço de Venda Feira (Digitável) e Lucro Líquido */}
               <div className="bg-linho p-4 rounded-2xl border-2 border-argila space-y-3">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center justify-between gap-3">
                   <div>
                     <label className="text-xs font-bold uppercase text-terracota block">
-                      Preço de Venda na Feira (R$)
+                      Preço Final de Venda (Digite o Valor R$)
                     </label>
                     <span className="text-[11px] text-oliva">
                       Markup efetivo: {costBreakdown.markupMultiplier}x (
                       {costBreakdown.realMarkupPercent}% s/ custo)
                     </span>
                   </div>
-                  <input
-                    type="number"
-                    step="0.50"
-                    value={salePrice}
-                    onChange={(e) => setSalePrice(Number(e.target.value))}
-                    className="w-28 px-3 py-2 rounded-xl bg-areia border border-borda text-right text-xl font-serif font-bold text-musgo"
-                  />
+                  <div className="flex items-center gap-1.5 bg-areia px-3 py-2 rounded-xl border-2 border-terracota/50 focus-within:border-terracota">
+                    <span className="text-sm font-bold text-oliva">R$</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={salePrice || ""}
+                      placeholder="0,00"
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setSalePrice(raw === "" ? 0 : Number(raw));
+                      }}
+                      className="w-24 bg-transparent text-right text-xl font-serif font-bold text-musgo focus:outline-none"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex justify-between text-xs text-oliva">
