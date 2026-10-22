@@ -41,6 +41,12 @@ export function AdminNav() {
       (o.queue_status === "queued" || o.queue_status === "printing")
   ).length;
 
+  const isAdminRole =
+    !currentAdminUser ||
+    currentAdminUser.is_master ||
+    currentAdminUser.username.toLowerCase() === "conradosmn" ||
+    currentAdminUser.role === "admin";
+
   const links = [
     {
       href: "/admin/caixa",
@@ -60,17 +66,21 @@ export function AdminNav() {
       label: "Catálogo",
       icon: Sparkles,
     },
-    {
-      href: "/admin/insumos",
-      label: "Insumos",
-      icon: PackageSearch,
-      badge: restockAlertCount > 0 ? restockAlertCount : undefined,
-    },
-    {
-      href: "/admin/usuarios",
-      label: "Usuários",
-      icon: Users,
-    },
+    ...(isAdminRole
+      ? [
+          {
+            href: "/admin/insumos",
+            label: "Insumos",
+            icon: PackageSearch,
+            badge: restockAlertCount > 0 ? restockAlertCount : undefined,
+          },
+          {
+            href: "/admin/usuarios",
+            label: "Usuários",
+            icon: Users,
+          },
+        ]
+      : []),
   ];
 
   return (

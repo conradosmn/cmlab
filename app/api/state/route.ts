@@ -248,8 +248,16 @@ export async function POST(req: Request) {
           if (body.filaments.length === 0) {
             await supabase.from("filaments").delete().neq("id", "__none__");
           } else {
+            const usedCodes = new Set<string>();
             const cleanFilaments = body.filaments.map(
-              ({ cost_per_gram, ...rest }: any) => rest
+              ({ cost_per_gram, ...rest }: any, idx: number) => {
+                let uniqueCode = (rest.code || `FIL-${idx + 1}`).trim();
+                if (usedCodes.has(uniqueCode.toUpperCase())) {
+                  uniqueCode = `${uniqueCode}-${String(rest.id || idx).slice(-4)}`;
+                }
+                usedCodes.add(uniqueCode.toUpperCase());
+                return { ...rest, code: uniqueCode };
+              }
             );
             await supabase.from("filaments").upsert(cleanFilaments);
             const ids = cleanFilaments.map((f: any) => f.id);

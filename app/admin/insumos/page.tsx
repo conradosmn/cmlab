@@ -143,6 +143,7 @@ const QUICK_RESOURCE_PRESETS: {
 
 export default function AdminInsumosPage() {
   const {
+    currentAdminUser,
     printers,
     filaments,
     accessories,
@@ -157,6 +158,12 @@ export default function AdminInsumosPage() {
     deleteAccessory,
     restockAccessory,
   } = useCMLabStore();
+
+  const isAdminRole =
+    !currentAdminUser ||
+    currentAdminUser.is_master ||
+    currentAdminUser.username.toLowerCase() === "conradosmn" ||
+    currentAdminUser.role === "admin";
 
   const [activeTab, setActiveTab] = useState<
     "all" | "printers" | "accessories" | "filaments"
@@ -477,7 +484,24 @@ export default function AdminInsumosPage() {
     setMinStockAlert(preset.min_stock_alert);
   };
 
-  // Salvar ou Atualizar Bobina de Filamento
+  const getNextAvailableFilamentCode = (brandName: string, matName: string) => {
+    const prefix = `${(matName || "PLA").split(" ")[0].toUpperCase()}-${(
+      brandName || "VOO"
+    )
+      .slice(0, 3)
+      .toUpperCase()}`;
+    let seq = filaments.length + 1;
+    let candidate = `${prefix}-${String(seq).padStart(2, "0")}`;
+    while (
+      filaments.some((f) => f.code.toLowerCase() === candidate.toLowerCase())
+    ) {
+      seq += 1;
+      candidate = `${prefix}-${String(seq).padStart(2, "0")}`;
+    }
+    return candidate;
+  };
+
+  // Salvar ou Atualizar Bobina de Filamento (permite múltiplas bobinas da mesma cor sem sobrescrever!)
   const handleSaveFilament = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!colorName.trim()) return;
@@ -490,9 +514,24 @@ export default function AdminInsumosPage() {
       setCustomBrands((prev) => [...prev, cleanBrand]);
     }
 
+    let finalCode = code.trim() || getNextAvailableFilamentCode(cleanBrand, material);
+    if (!editingFilId) {
+      // Garante que o código nunca colida com outra bobina já cadastrada no banco
+      let suffix = 2;
+      const baseCode = finalCode;
+      while (
+        filaments.some((f) => f.code.toLowerCase() === finalCode.toLowerCase())
+      ) {
+        finalCode = `${baseCode}-B${suffix}`;
+        suffix += 1;
+      }
+    }
+
     const newFil: Filament = {
-      id: editingFilId || `fil-${Date.now()}`,
-      code: code.trim(),
+      id:
+        editingFilId ||
+        `fil-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      code: finalCode,
       brand: cleanBrand,
       material: material.trim(),
       color_name: colorName.trim(),
@@ -510,7 +549,28 @@ export default function AdminInsumosPage() {
     setEditingFilId(null);
     setColorName("");
     setIsBrandDropdownOpen(false);
-    setCode(`PLA-${cleanBrand.slice(0, 3).toUpperCase()}-0${filaments.length + 2}`);
+    setCode(getNextAvailableFilamentCode(cleanBrand, material));
+  };
+
+  const handleDuplicateFilamentSpool = async (fil: Filament) => {
+    let suffix = 2;
+    const baseCode = fil.code.replace(/-B\d+$/i, "");
+    let nextCode = `${baseCode}-B${suffix}`;
+    while (
+      filaments.some((f) => f.code.toLowerCase() === nextCode.toLowerCase())
+    ) {
+      suffix += 1;
+      nextCode = `${baseCode}-B${suffix}`;
+    }
+    const duplicatedSpool: Filament = {
+      ...fil,
+      id: `fil-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      code: nextCode,
+      purchase_date: new Date().toISOString().slice(0, 10),
+      remaining_weight_grams: fil.initial_weight_grams || 1000,
+      is_on_order_color: false,
+    };
+    await addOrUpdateFilament(duplicatedSpool);
   };
 
   const handleEditFilament = (fil: Filament) => {
@@ -526,6 +586,36 @@ export default function AdminInsumosPage() {
     setRemainingWeight(fil.remaining_weight_grams);
     setIsOnOrder(fil.is_on_order_color);
   };
+
+  if (!isAdminRole) {
+    return (
+      <div className="min-h-screen bg-linho">
+        <AdminNav />
+        <main className="max-w-3xl mx-auto px-4 sm:px-6 py-16">
+          <div className="bg-areia border border-borda rounded-3xl p-8 shadow-atelier text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-terracota/15 text-terracota flex items-center justify-center mx-auto">
+              <KeyRound className="w-6 h-6" />
+            </div>
+            <h1 className="text-2xl font-serif font-bold text-musgo">
+              Insumos Restritos ao Perfil Admin
+            </h1>
+            <p className="text-sm text-oliva max-w-md mx-auto">
+              O cadastro e gerenciamento de bobinas de filamento, pacotes de acessórios e
+              impressoras 3D está liberado exclusivamente para o administrador.
+            </p>
+            <div className="pt-2">
+              <a
+                href="/admin/catalogo"
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-terracota hover:bg-terracota-hover text-white text-sm font-semibold shadow-sm transition"
+              >
+                Voltar para o Catálogo
+              </a>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-linho">
@@ -1415,9 +1505,18 @@ export default function AdminInsumosPage() {
                         <button
                           type="button"
                           onClick={() => restockFilament(fil.id, 1000)}
-                          className="px-3 py-2 rounded-xl bg-areia hover:bg-borda/50 border border-borda text-xs font-semibold text-musgo"
+                          title="Somar +1kg no saldo desta bobina"
+                          className="px-2.5 py-2 rounded-xl bg-areia hover:bg-borda/50 border border-borda text-xs font-semibold text-musgo"
                         >
                           +1kg
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDuplicateFilamentSpool(fil)}
+                          title="Adicionar outra bobina separada desta mesma cor"
+                          className="px-2.5 py-2 rounded-xl bg-linho hover:bg-terracota/15 border border-borda text-xs font-semibold text-terracota"
+                        >
+                          +1 Bobina Igual
                         </button>
                         <button
                           type="button"

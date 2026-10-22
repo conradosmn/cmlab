@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   Accessory,
   AdminUser,
@@ -208,6 +208,13 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
   });
   const [isLoaded, setIsLoaded] = useState(false);
 
+  const pendingMutationsRef = useRef(0);
+  const lastMutationAtRef = useRef(0);
+  const filamentsRef = useRef<Filament[]>(filaments);
+  useEffect(() => {
+    filamentsRef.current = filaments;
+  }, [filaments]);
+
   // Carrega sessão do admin salva no navegador
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -237,10 +244,23 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const syncFromServer = useCallback(async () => {
+    if (
+      pendingMutationsRef.current > 0 ||
+      Date.now() - lastMutationAtRef.current < 2500
+    ) {
+      return;
+    }
+    const fetchStartedAt = Date.now();
     try {
       const res = await fetch("/api/state", { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
+      if (
+        pendingMutationsRef.current > 0 ||
+        lastMutationAtRef.current >= fetchStartedAt
+      ) {
+        return;
+      }
       if (Array.isArray(data.adminUsers) && data.adminUsers.length > 0) {
         let serverList: AdminUser[] = [...data.adminUsers];
         let hadUnsyncedLocalUsers = false;
@@ -339,12 +359,15 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
       orders?: PrintQueueOrder[];
       pixSettings?: PixSettings;
     }) => {
+      pendingMutationsRef.current += 1;
+      lastMutationAtRef.current = Date.now();
       try {
         await fetch("/api/state", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(next),
         });
+        lastMutationAtRef.current = Date.now();
         if (typeof window !== "undefined" && "BroadcastChannel" in window) {
           const bc = new BroadcastChannel("cmlab_realtime_sync");
           bc.postMessage({ type: "STATE_UPDATED", timestamp: Date.now() });
@@ -352,6 +375,9 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (e) {
         console.error("Failed to persist state", e);
+      } finally {
+        pendingMutationsRef.current = Math.max(0, pendingMutationsRef.current - 1);
+        lastMutationAtRef.current = Date.now();
       }
     },
     []
@@ -588,16 +614,18 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
           ? Number((filament.purchase_price / filament.initial_weight_grams).toFixed(4))
           : 0.11;
       const normalized = { ...filament, cost_per_gram: costPerGram };
-      const exists = filaments.some((f) => f.id === normalized.id);
+      const currentFils = filamentsRef.current;
+      const exists = currentFils.some((f) => f.id === normalized.id);
       const nextFilaments = exists
-        ? filaments.map((f) => (f.id === normalized.id ? normalized : f))
-        : [...filaments, normalized];
+        ? currentFils.map((f) => (f.id === normalized.id ? normalized : f))
+        : [...currentFils, normalized];
+      filamentsRef.current = nextFilaments;
       const nextProducts = recalculateProductsCost(products, nextFilaments, accessories);
       setFilaments(nextFilaments);
       setProducts(nextProducts);
       await persistState({ filaments: nextFilaments, products: nextProducts });
     },
-    [filaments, products, accessories, persistState]
+    [products, accessories, persistState]
   );
 
   const deleteFilament = useCallback(
