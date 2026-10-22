@@ -89,13 +89,13 @@ export default function HomePage() {
                 >
                   <ShieldCheck className="w-4 h-4 text-terracota" />
                   <span>
-                    Admin ({currentAdminUser.full_name.split(" ")[0]})
+                    {currentAdminUser.full_name.split(" ")[0]}
                   </span>
                 </Link>
                 <button
                   type="button"
                   onClick={logoutAdmin}
-                  title="Sair da conta Admin"
+                  title="Sair da conta"
                   className="px-3.5 py-2.5 rounded-2xl bg-linho hover:bg-borda/50 border border-borda text-xs font-semibold text-oliva hover:text-red-700 transition flex items-center gap-1.5"
                 >
                   <LogOut className="w-4 h-4" />
@@ -112,7 +112,7 @@ export default function HomePage() {
                 className="px-4 py-2.5 rounded-2xl bg-musgo hover:bg-musgo/90 text-linho text-xs sm:text-sm font-semibold shadow-sm transition flex items-center gap-2"
               >
                 <Lock className="w-4 h-4 text-terracota" />
-                <span>Login Admin</span>
+                <span>Login</span>
               </button>
             )}
 
@@ -390,10 +390,10 @@ export default function HomePage() {
                 <Lock className="w-5 h-5" />
               </div>
               <h2 className="text-2xl font-serif font-bold text-musgo">
-                Login Administrativo
+                Login
               </h2>
               <p className="text-xs text-oliva">
-                Entre com seu usuário ou e-mail para liberar o painel do CMLab.
+                Entre com seu usuário ou e-mail para acessar o sistema CMLab.
               </p>
             </div>
 
@@ -457,7 +457,7 @@ export default function HomePage() {
                 className="w-full py-3.5 rounded-2xl bg-terracota hover:bg-terracota-hover text-white font-semibold text-sm shadow-md transition flex items-center justify-center gap-2"
               >
                 <Lock className="w-4 h-4" />
-                <span>Entrar no Painel Admin</span>
+                <span>Entrar</span>
               </button>
             </form>
           </div>
