@@ -55,6 +55,21 @@ const TCE_QUICK_SECTORS = [
   "Combinar Retirada via WhatsApp",
 ];
 
+function formatBrazilPhone(raw: string): string {
+  let digits = (raw || "").replace(/\D/g, "");
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
+    digits = digits.slice(2);
+  }
+  digits = digits.slice(0, 11);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+}
+
 export function CheckoutModal({
   isOpen,
   onClose,
@@ -621,9 +636,10 @@ export function CheckoutModal({
                   <input
                     type="tel"
                     required
+                    maxLength={15}
                     value={customerWhatsapp}
-                    onChange={(e) => setCustomerWhatsapp(e.target.value)}
-                    placeholder="(61) 99999-9999"
+                    onChange={(e) => setCustomerWhatsapp(formatBrazilPhone(e.target.value))}
+                    placeholder="(86) 99999-9999"
                     className="w-full pl-10 pr-4 py-3 rounded-xl bg-areia border border-borda text-musgo text-sm focus:outline-none focus:ring-2 focus:ring-argila"
                   />
                 </div>

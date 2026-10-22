@@ -29,6 +29,21 @@ function buildDefaultPasswordFromFullName(fullName: string): string {
   return `${firstName || "nome"}@12345`;
 }
 
+function formatBrazilPhone(raw: string): string {
+  let digits = (raw || "").replace(/\D/g, "");
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
+    digits = digits.slice(2);
+  }
+  digits = digits.slice(0, 11);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+}
+
 export default function AdminUsuariosPage() {
   const {
     adminUsers,
@@ -58,7 +73,7 @@ export default function AdminUsuariosPage() {
     setEditingId(u.id);
     setFullName(u.full_name);
     setEmail(u.email);
-    setPhone(u.phone);
+    setPhone(formatBrazilPhone(u.phone));
     setUsername(u.username);
     setFeedback("");
   };
@@ -108,7 +123,7 @@ export default function AdminUsuariosPage() {
       email: email.trim(),
       password: existing ? existing.password : generatedDefaultPassword,
       full_name: fullName.trim(),
-      phone: phone.trim(),
+      phone: formatBrazilPhone(phone),
       is_master: existing?.is_master || false,
       must_change_password: existing ? existing.must_change_password : true,
       created_at: existing?.created_at || new Date().toISOString(),
@@ -231,9 +246,10 @@ export default function AdminUsuariosPage() {
                 <input
                   type="tel"
                   required
+                  maxLength={15}
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Ex: (86) 99999-9999"
+                  onChange={(e) => setPhone(formatBrazilPhone(e.target.value))}
+                  placeholder="Ex: (86) 98146-5710"
                   className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-linho border border-borda text-sm text-musgo focus:outline-none focus:ring-2 focus:ring-argila"
                 />
               </div>
@@ -337,7 +353,7 @@ export default function AdminUsuariosPage() {
                         </span>
                         <span className="inline-flex items-center gap-1">
                           <Phone className="w-3.5 h-3.5 text-terracota" />
-                          {u.phone}
+                          {formatBrazilPhone(u.phone) || u.phone}
                         </span>
                       </div>
                     </div>

@@ -209,16 +209,13 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) return;
       const data = await res.json();
       if (Array.isArray(data.adminUsers) && data.adminUsers.length > 0) {
-        setAdminUsers((prev) => {
-          // Mescla usuários do servidor com backup local para não perder cadastros
-          const map = new Map<string, AdminUser>();
-          for (const u of data.adminUsers) map.set(u.id, u);
-          for (const u of prev) {
-            if (!map.has(u.id)) map.set(u.id, u);
-          }
-          const merged = Array.from(map.values());
-          return merged;
-        });
+        setAdminUsers(data.adminUsers);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            "cmlab_admin_users_backup",
+            JSON.stringify(data.adminUsers)
+          );
+        }
       }
       const loadedPrinters =
         Array.isArray(data.printers) && data.printers.length > 0
