@@ -107,11 +107,27 @@ export default function FeiraKioskPage() {
     );
   }, [products, selectedCategory]);
 
-  const keychainProduct = useMemo(
+  const keychainProduct = useMemo<Product>(
     () =>
       products.find((p) => p.is_custom_keychain) ||
-      products[products.length - 1] ||
-      null,
+      products[products.length - 1] || {
+        id: "prod-chaveiro-personalizado",
+        name: "Chaveiro Personalizado com Nome (2.5D AMS)",
+        category: "chaveiros",
+        description:
+          "Personalize na hora com seu nome, escolha a fonte, combinação de cores da base e letras, e adicione pingente exclusivo pendurado na argola.",
+        images: [],
+        print_time_minutes: 24,
+        weight_grams: 12,
+        max_colors: 3,
+        allowed_filament_ids: [],
+        accessories: [],
+        production_cost: 3.85,
+        price: 15.0,
+        is_custom_keychain: true,
+        ready_stock_qty: 0,
+        active: true,
+      },
     [products]
   );
 

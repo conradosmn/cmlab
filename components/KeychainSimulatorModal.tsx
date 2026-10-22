@@ -209,16 +209,67 @@ function renderHollowCharmShape(charm: KeychainCharm, fillHex: string) {
   }
 }
 
+const FALLBACK_FILAMENTS: Filament[] = [
+  {
+    id: "fil-terracota",
+    code: "PLA-01",
+    brand: "Padrão",
+    material: "PLA",
+    color_name: "Terracota",
+    hex_code: "#A3522B",
+    purchase_date: "2026-10-20",
+    purchase_price: 115,
+    initial_weight_grams: 1000,
+    remaining_weight_grams: 1000,
+    cost_per_gram: 0.115,
+    is_on_order_color: false,
+    restock_lead_time_days: 3,
+    active: true,
+  },
+  {
+    id: "fil-marmore",
+    code: "PLA-02",
+    brand: "Padrão",
+    material: "PLA",
+    color_name: "Branco Mármore",
+    hex_code: "#EFECE6",
+    purchase_date: "2026-10-20",
+    purchase_price: 115,
+    initial_weight_grams: 1000,
+    remaining_weight_grams: 1000,
+    cost_per_gram: 0.115,
+    is_on_order_color: false,
+    restock_lead_time_days: 3,
+    active: true,
+  },
+  {
+    id: "fil-dourado",
+    code: "PLA-03",
+    brand: "Padrão",
+    material: "PLA Silk",
+    color_name: "Dourado Silk",
+    hex_code: "#D4AF37",
+    purchase_date: "2026-10-20",
+    purchase_price: 115,
+    initial_weight_grams: 1000,
+    remaining_weight_grams: 1000,
+    cost_per_gram: 0.115,
+    is_on_order_color: false,
+    restock_lead_time_days: 3,
+    active: true,
+  },
+];
+
 export function KeychainSimulatorModal({
   isOpen,
   onClose,
   filaments,
   onProceedToCheckout,
 }: KeychainSimulatorModalProps) {
-  const activeFilaments = useMemo(
-    () => filaments.filter((f) => f.active),
-    [filaments]
-  );
+  const activeFilaments = useMemo(() => {
+    const active = filaments.filter((f) => f.active);
+    return active.length > 0 ? active : FALLBACK_FILAMENTS;
+  }, [filaments]);
 
   const [nameText, setNameText] = useState("Maria");
   const [selectedFont, setSelectedFont] = useState<KeychainFont>("rounded");

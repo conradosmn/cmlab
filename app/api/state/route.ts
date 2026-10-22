@@ -92,35 +92,6 @@ export async function GET() {
       ]);
 
       if (!filRes.error && !accRes.error && !prodRes.error && !ordRes.error) {
-        // Se o banco no Supabase acabou de ser criado e está vazio, popula automaticamente com os seeds iniciais!
-        if (
-          (filRes.data?.length ?? 0) === 0 &&
-          (accRes.data?.length ?? 0) === 0 &&
-          (prodRes.data?.length ?? 0) === 0
-        ) {
-          const cleanFilaments = INITIAL_FILAMENTS.map(
-            ({ cost_per_gram, ...rest }) => rest
-          );
-          const cleanAccessories = INITIAL_ACCESSORIES.map(
-            ({ unit_cost, ...rest }) => rest
-          );
-
-          await supabase.from("filaments").upsert(cleanFilaments);
-          await supabase.from("accessories").upsert(cleanAccessories);
-          await supabase.from("products").upsert(INITIAL_PRODUCTS);
-          await supabase.from("print_queue_orders").upsert(INITIAL_ORDERS);
-
-          return NextResponse.json({
-            printers: INITIAL_PRINTERS,
-            filaments: INITIAL_FILAMENTS,
-            accessories: INITIAL_ACCESSORIES,
-            products: INITIAL_PRODUCTS,
-            orders: INITIAL_ORDERS,
-            source: "supabase_seeded",
-            updatedAt: Date.now(),
-          });
-        }
-
         const local = readLocalDb();
         let remoteAdminUsers = local.adminUsers || INITIAL_ADMIN_USERS;
         try {
@@ -206,22 +177,26 @@ export async function POST(req: Request) {
           }
         }
         if (Array.isArray(body.filaments)) {
-          const cleanFilaments = body.filaments.map(
-            ({ cost_per_gram, ...rest }: any) => rest
-          );
-          await supabase.from("filaments").upsert(cleanFilaments);
-          const ids = cleanFilaments.map((f: any) => f.id);
-          if (ids.length > 0) {
+          if (body.filaments.length === 0) {
+            await supabase.from("filaments").delete().neq("id", "__none__");
+          } else {
+            const cleanFilaments = body.filaments.map(
+              ({ cost_per_gram, ...rest }: any) => rest
+            );
+            await supabase.from("filaments").upsert(cleanFilaments);
+            const ids = cleanFilaments.map((f: any) => f.id);
             await supabase.from("filaments").delete().not("id", "in", `(${ids.join(",")})`);
           }
         }
         if (Array.isArray(body.accessories)) {
-          const cleanAccessories = body.accessories.map(
-            ({ unit_cost, ...rest }: any) => rest
-          );
-          await supabase.from("accessories").upsert(cleanAccessories);
-          const ids = cleanAccessories.map((a: any) => a.id);
-          if (ids.length > 0) {
+          if (body.accessories.length === 0) {
+            await supabase.from("accessories").delete().neq("id", "__none__");
+          } else {
+            const cleanAccessories = body.accessories.map(
+              ({ unit_cost, ...rest }: any) => rest
+            );
+            await supabase.from("accessories").upsert(cleanAccessories);
+            const ids = cleanAccessories.map((a: any) => a.id);
             await supabase
               .from("accessories")
               .delete()
@@ -229,9 +204,11 @@ export async function POST(req: Request) {
           }
         }
         if (Array.isArray(body.products)) {
-          await supabase.from("products").upsert(body.products);
-          const ids = body.products.map((p: any) => p.id);
-          if (ids.length > 0) {
+          if (body.products.length === 0) {
+            await supabase.from("products").delete().neq("id", "__none__");
+          } else {
+            await supabase.from("products").upsert(body.products);
+            const ids = body.products.map((p: any) => p.id);
             await supabase.from("products").delete().not("id", "in", `(${ids.join(",")})`);
           }
         }
