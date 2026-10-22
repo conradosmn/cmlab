@@ -62,7 +62,7 @@ export function AdminNav() {
     },
     {
       href: "/admin/insumos",
-      label: "Insumos & Compras",
+      label: "Insumos",
       icon: PackageSearch,
       badge: restockAlertCount > 0 ? restockAlertCount : undefined,
     },

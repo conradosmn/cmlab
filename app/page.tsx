@@ -317,7 +317,7 @@ export default function HomePage() {
                 </span>
               </div>
               <h2 className="text-2xl font-serif font-bold text-musgo">
-                5. Estoque, Impressoras & Insumos (/admin/insumos)
+                5. Insumos (/admin/insumos)
               </h2>
               <p className="text-xs text-oliva leading-relaxed">
                 Controle de bobinas de filamento, pacotes de acessórios, frota de impressoras 3D
