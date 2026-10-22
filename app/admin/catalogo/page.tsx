@@ -104,33 +104,44 @@ export default function AdminCatalogoPage() {
 
   // Estados do Produto + Recursos Vinculados (Chaveiro, Gota de Silicone, etc.)
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [name, setName] = useState("Vaso Cerâmico Texturizado A1");
+  const [name, setName] = useState("");
   const [category, setCategory] = useState<ProductCategory>("decoracao");
-  const [description, setDescription] = useState(
-    "Peça produzida em impressão 3D de alta precisão na Bambu Lab A1 com acabamento orgânico fosco."
-  );
-  const [productImages, setProductImages] = useState<string[]>([
-    "https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?auto=format&fit=crop&w=900&q=80",
-  ]);
+  const [description, setDescription] = useState("");
+  const [productImages, setProductImages] = useState<string[]>([]);
   const [externalImageUrlInput, setExternalImageUrlInput] = useState("");
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  const [printTimeMinutes, setPrintTimeMinutes] = useState<number>(210);
-  const [weightGrams, setWeightGrams] = useState<number>(130);
-  const [baseWeight100, setBaseWeight100] = useState<number>(130);
-  const [baseTime100, setBaseTime100] = useState<number>(210);
+  const [printTimeMinutes, setPrintTimeMinutes] = useState<number>(60);
+  const [weightGrams, setWeightGrams] = useState<number>(50);
+  const [baseWeight100, setBaseWeight100] = useState<number>(50);
+  const [baseTime100, setBaseTime100] = useState<number>(60);
   const [catalogScaleDelta, setCatalogScaleDelta] = useState<number>(0);
   const [maxColors, setMaxColors] = useState<number>(1);
-  const [allowedFilamentIds, setAllowedFilamentIds] = useState<string[]>(() =>
-    filaments.slice(0, 4).map((f) => f.id)
-  );
+  const [allowedFilamentIds, setAllowedFilamentIds] = useState<string[]>([]);
   const [selectedAccessories, setSelectedAccessories] = useState<
     ProductAccessoryItem[]
-  >([
-    { accessory_id: "acc-silicone", quantity: 4 },
-    { accessory_id: "acc-tag-embalagem", quantity: 1 },
-  ]);
-  const [readyStockQty, setReadyStockQty] = useState<number>(2);
-  const [salePrice, setSalePrice] = useState<number>(68.0);
+  >([]);
+  const [readyStockQty, setReadyStockQty] = useState<number>(0);
+  const [salePrice, setSalePrice] = useState<number>(35.0);
+
+  const resetCatalogForm = () => {
+    setEditingId(null);
+    setName("");
+    setCategory("decoracao");
+    setDescription("");
+    setMakerworldUrl("");
+    setProductImages([]);
+    setExternalImageUrlInput("");
+    setPrintTimeMinutes(60);
+    setWeightGrams(50);
+    setBaseWeight100(50);
+    setBaseTime100(60);
+    setCatalogScaleDelta(0);
+    setMaxColors(1);
+    setAllowedFilamentIds([]);
+    setSelectedAccessories([]);
+    setReadyStockQty(0);
+    setSalePrice(35.0);
+  };
 
   // Mini-modal inline para criar um novo recurso rápido (ex: novo tipo de chaveiro ou gota de silicone) sem sair da tela
   const [showQuickResourceForm, setShowQuickResourceForm] = useState(false);
@@ -413,10 +424,17 @@ export default function AdminCatalogoPage() {
     try {
       const parsed = await parseBambu3mfFile(file);
       setName(parsed.title);
+      if (!description.trim()) {
+        setDescription(
+          "Peça produzida em impressão 3D de alta precisão na Bambu Lab A1 com acabamento orgânico fosco."
+        );
+      }
       setCatalogScaleDelta(0);
 
       if (parsed.photos.length > 0) {
         setProductImages(parsed.photos);
+      } else {
+        setProductImages([]);
       }
 
       if (parsed.weightGrams > 0) {
@@ -474,6 +492,7 @@ export default function AdminCatalogoPage() {
       });
     } finally {
       setImportLoading(false);
+      e.target.value = "";
     }
   };
 
@@ -527,14 +546,14 @@ export default function AdminCatalogoPage() {
     };
 
     await addOrUpdateProduct(productPayload);
-    setEditingId(null);
+    resetCatalogForm();
     setImportMessage({
       type: "success",
       text: isAdminRole
-        ? `Produto "${productPayload.name}" salvo com ${validImages.length} foto(s) e custo calculado de R$ ${costBreakdown.totalProductionCost
+        ? `✅ Produto "${productPayload.name}" publicado com ${validImages.length} foto(s) e custo de R$ ${costBreakdown.totalProductionCost
             .toFixed(2)
-            .replace(".", ",")}!`
-        : `Produto "${productPayload.name}" salvo no catálogo com ${validImages.length} foto(s)!`,
+            .replace(".", ",")}! Formulário limpo e pronto para o próximo upload.`
+        : `✅ Produto "${productPayload.name}" publicado no catálogo com ${validImages.length} foto(s)! Formulário limpo e pronto para o próximo upload.`,
     });
   };
 
@@ -693,7 +712,7 @@ export default function AdminCatalogoPage() {
               {editingId && (
                 <button
                   type="button"
-                  onClick={() => setEditingId(null)}
+                  onClick={resetCatalogForm}
                   className="text-xs text-terracota underline font-semibold"
                 >
                   Cancelar Edição
