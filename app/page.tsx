@@ -261,7 +261,7 @@ export default function HomePage() {
                 </span>
               </div>
               <h2 className="text-2xl font-serif font-bold text-musgo">
-                3. Fila Inteligente A1 (/admin/fila)
+                3. Fila de Impressão (/admin/fila)
               </h2>
               <p className="text-xs text-oliva leading-relaxed">
                 Timeline cronológica da Bambu Lab A1 com Turno Corujão (20h-23h), folga automática

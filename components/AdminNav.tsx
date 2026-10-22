@@ -51,7 +51,7 @@ export function AdminNav() {
     },
     {
       href: "/admin/fila",
-      label: "Fila A1 & Corujão",
+      label: "Fila de Impressão",
       icon: CalendarClock,
       badge: queuedCount > 0 ? queuedCount : undefined,
     },
