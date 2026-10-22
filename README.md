@@ -13,8 +13,8 @@ Sistema Kiosk de Encomendas para iPad (E-commerce de Feira TCE) + Simulador de C
 
 2. **Crie o arquivo `.env.local` na raiz do projeto com as credenciais do Supabase:**
    ```env
-   NEXT_PUBLIC_SUPABASE_URL=https://ginodilkwysuvlbizbfe.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdpbm9kaWxrd3lzdXZsYml6YmZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1MzIxNDUsImV4cCI6MjEwODEwODE0NX0.UxJYJMzxyGTzUMfHyDeb5uLF5G_zVT5xsjylQ_J56-w
+   NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-chave-anon-publica
    ```
 
 3. **Inicie o servidor de desenvolvimento:**
