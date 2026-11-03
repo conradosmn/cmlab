@@ -24,6 +24,11 @@ import { buildSmartScheduleA1 } from "./queueScheduler";
 import { calculate3DCosts } from "./costCalculator";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
 
+export interface LoginResult {
+  ok: boolean;
+  error?: string;
+}
+
 interface CMLabStoreContextValue {
   adminUsers: AdminUser[];
   currentAdminUser: AdminUser | null;
@@ -38,8 +43,12 @@ interface CMLabStoreContextValue {
   isLoaded: boolean;
 
   // Auth & Users Actions
-  loginAdmin: (loginOrEmail: string, password: string) => boolean;
-  logoutAdmin: () => void;
+  loginAdmin: (loginOrEmail: string, password: string) => Promise<LoginResult>;
+  logoutAdmin: () => Promise<void>;
+  changeOwnPassword: (newPassword: string) => Promise<LoginResult>;
+  resetUserPassword: (
+    userId: string
+  ) => Promise<{ ok: boolean; temporaryPassword?: string; error?: string }>;
   addOrUpdateAdminUser: (user: AdminUser) => Promise<void>;
   deleteAdminUser: (userId: string) => Promise<void>;
 
@@ -215,32 +224,35 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
     filamentsRef.current = filaments;
   }, [filaments]);
 
-  // Carrega sessão do admin salva no navegador
+  // A sessão vive num cookie httpOnly: o navegador não enxerga o conteúdo, e
+  // quem diz quem está logado é o servidor.
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    // Versões anteriores guardavam usuários e senhas em claro aqui. Apagar é
+    // parte da correção: senão a senha antiga segue no dispositivo.
     try {
-      const savedSession = localStorage.getItem("cmlab_admin_session");
-      if (savedSession) {
-        const parsed = JSON.parse(savedSession);
-        if (parsed && parsed.username) {
-          const isMaster =
-            parsed.is_master || parsed.username.toLowerCase() === "conradosmn";
-          setCurrentAdminUser({
-            ...parsed,
-            role: isMaster ? "admin" : parsed.role || "gerente",
-          });
-        }
-      }
-      const savedUsersBackup = localStorage.getItem("cmlab_admin_users_backup");
-      if (savedUsersBackup) {
-        const parsedUsers = JSON.parse(savedUsersBackup);
-        if (Array.isArray(parsedUsers) && parsedUsers.length > 0) {
-          setAdminUsers(normalizeAdminUsersList(parsedUsers));
-        }
-      }
+      localStorage.removeItem("cmlab_admin_session");
+      localStorage.removeItem("cmlab_admin_users_backup");
     } catch {
       // ignore
     }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.user) setCurrentAdminUser(data.user);
+      } catch {
+        // sem sessão: segue deslogado
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const syncFromServer = useCallback(async () => {
@@ -261,72 +273,10 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
       ) {
         return;
       }
+      // A lista de usuários só vem preenchida para quem tem sessão; o servidor
+      // devolve [] para visitantes anônimos da vitrine.
       if (Array.isArray(data.adminUsers) && data.adminUsers.length > 0) {
-        let serverList: AdminUser[] = [...data.adminUsers];
-        let hadUnsyncedLocalUsers = false;
-
-        if (typeof window !== "undefined") {
-          try {
-            const rawLocal = localStorage.getItem("cmlab_admin_users_backup");
-            if (rawLocal) {
-              const localUsers: AdminUser[] = JSON.parse(rawLocal);
-              if (Array.isArray(localUsers)) {
-                for (const lu of localUsers) {
-                  if (
-                    lu?.username &&
-                    !serverList.some(
-                      (su) =>
-                        su.username?.toLowerCase() === lu.username.toLowerCase()
-                    )
-                  ) {
-                    serverList.push({
-                      ...lu,
-                      role: lu.role || "gerente",
-                    });
-                    hadUnsyncedLocalUsers = true;
-                  }
-                }
-              }
-            }
-          } catch {
-            // ignore
-          }
-        }
-
-        const normalizedUsers = normalizeAdminUsersList(serverList);
-        setAdminUsers(normalizedUsers);
-
-        if (typeof window !== "undefined") {
-          localStorage.setItem(
-            "cmlab_admin_users_backup",
-            JSON.stringify(normalizedUsers)
-          );
-          const savedSession = localStorage.getItem("cmlab_admin_session");
-          if (savedSession) {
-            try {
-              const sess = JSON.parse(savedSession);
-              const matched = normalizedUsers.find(
-                (u) =>
-                  u.id === sess?.id ||
-                  u.username?.toLowerCase() === sess?.username?.toLowerCase()
-              );
-              if (matched) {
-                setCurrentAdminUser(matched);
-                localStorage.setItem("cmlab_admin_session", JSON.stringify(matched));
-              }
-            } catch {
-              // ignore
-            }
-          }
-        }
-
-        if (hadUnsyncedLocalUsers) {
-          fetch("/api/state", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ adminUsers: normalizedUsers }),
-          }).catch(() => {});
-        }
+        setAdminUsers(normalizeAdminUsersList(data.adminUsers));
       }
       const loadedPrinters =
         Array.isArray(data.printers) && data.printers.length > 0
@@ -507,38 +457,24 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
         "id" | "order_number" | "created_at" | "cooldown_minutes" | "is_night_owl_slot"
       >
     ) => {
-      const maxNum = orders.reduce((m, o) => Math.max(m, o.order_number || 100), 100);
-      const cooldown = orderInput.print_time_minutes > 360 ? 120 : 15;
-      const newOrder: PrintQueueOrder = {
-        ...orderInput,
-        id: `ord-${Date.now()}`,
-        order_number: maxNum + 1,
-        cooldown_minutes: cooldown,
-        is_night_owl_slot: false,
-        created_at: new Date().toISOString(),
-      };
-
-      let nextFilaments = filaments;
-      let nextAccessories = accessories;
-
-      if (newOrder.payment_status === "paid") {
-        const deducted = deductStockOnPayment(newOrder, filaments, accessories, products);
-        nextFilaments = deducted.updatedFilaments;
-        nextAccessories = deducted.updatedAccessories;
-        setFilaments(nextFilaments);
-        setAccessories(nextAccessories);
+      // A vitrine é pública, então o pedido nasce no servidor: lá o número de
+      // ordem, o id e a data são atribuídos, e o preço/status são validados.
+      // A baixa de estoque acontece só na confirmação do pagamento, no caixa.
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderInput),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.order) {
+        throw new Error(data?.error || "Não foi possível registrar o pedido.");
       }
 
-      const nextOrders = applySmartScheduleToOrders([...orders, newOrder]);
-      setOrders(nextOrders);
-      await persistState({
-        orders: nextOrders,
-        filaments: nextFilaments,
-        accessories: nextAccessories,
-      });
+      const newOrder: PrintQueueOrder = data.order;
+      setOrders((prev) => applySmartScheduleToOrders([...prev, newOrder]));
       return newOrder;
     },
-    [orders, filaments, accessories, products, deductStockOnPayment, persistState]
+    []
   );
 
   const confirmOrderPayment = useCallback(
@@ -809,50 +745,88 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
     [printers, products, filaments, accessories, persistState]
   );
 
+  /**
+   * A senha vai para o servidor e não volta. A comparação acontece lá contra o
+   * hash bcrypt; aqui só recebemos o usuário já sem material sensível.
+   */
   const loginAdmin = useCallback(
-    (loginOrEmail: string, password: string): boolean => {
-      const cleanLogin = loginOrEmail.trim().toLowerCase();
-      const found = adminUsers.find((u) => {
-        const loginMatches =
-          u.username.trim().toLowerCase() === cleanLogin ||
-          u.email.trim().toLowerCase() === cleanLogin;
-        if (!loginMatches) return false;
-        if (u.password === password) return true;
-        if (
-          u.must_change_password &&
-          u.password.trim().toLowerCase() === password.trim().toLowerCase()
-        ) {
-          return true;
+    async (loginOrEmail: string, password: string): Promise<LoginResult> => {
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ login: loginOrEmail, password }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          return { ok: false, error: data?.error || "Não foi possível entrar." };
         }
-        return false;
-      });
-      if (found) {
-        const isMaster =
-          found.is_master || found.username.toLowerCase() === "conradosmn";
-        const normalizedFound: AdminUser = {
-          ...found,
-          role: isMaster ? "admin" : found.role || "gerente",
-        };
-        setCurrentAdminUser(normalizedFound);
-        if (typeof window !== "undefined") {
-          localStorage.setItem(
-            "cmlab_admin_session",
-            JSON.stringify(normalizedFound)
-          );
-        }
-        return true;
+        setCurrentAdminUser(data.user);
+        await syncFromServer();
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "Falha de conexão com o servidor." };
       }
-      return false;
     },
-    [adminUsers]
+    [syncFromServer]
   );
 
-  const logoutAdmin = useCallback(() => {
-    setCurrentAdminUser(null);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("cmlab_admin_session");
+  const logoutAdmin = useCallback(async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // mesmo sem resposta, derruba a sessão local
     }
+    setCurrentAdminUser(null);
+    setAdminUsers([]);
   }, []);
+
+  /** Troca da própria senha (usada na tela de primeiro acesso). */
+  const changeOwnPassword = useCallback(
+    async (newPassword: string): Promise<LoginResult> => {
+      try {
+        const res = await fetch("/api/auth/change-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ newPassword }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          return { ok: false, error: data?.error || "Não foi possível trocar a senha." };
+        }
+        setCurrentAdminUser(data.user);
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "Falha de conexão com o servidor." };
+      }
+    },
+    []
+  );
+
+  /**
+   * Gera uma senha temporária para outro usuário. O valor em claro volta uma
+   * única vez, para ser repassado ao titular.
+   */
+  const resetUserPassword = useCallback(
+    async (userId: string): Promise<{ ok: boolean; temporaryPassword?: string; error?: string }> => {
+      try {
+        const res = await fetch("/api/auth/reset-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          return { ok: false, error: data?.error || "Não foi possível gerar a senha." };
+        }
+        await syncFromServer();
+        return { ok: true, temporaryPassword: data.temporaryPassword };
+      } catch {
+        return { ok: false, error: "Falha de conexão com o servidor." };
+      }
+    },
+    [syncFromServer]
+  );
 
   const addOrUpdateAdminUser = useCallback(
     async (user: AdminUser) => {
@@ -863,14 +837,8 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
           : [...adminUsers, user]
       );
       setAdminUsers(nextUsers);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("cmlab_admin_users_backup", JSON.stringify(nextUsers));
-      }
       if (currentAdminUser?.id === user.id) {
         setCurrentAdminUser(user);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("cmlab_admin_session", JSON.stringify(user));
-        }
       }
       await persistState({ adminUsers: nextUsers });
     },
@@ -883,9 +851,6 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
       if (target?.is_master || target?.username === "conradosmn") return;
       const nextUsers = adminUsers.filter((u) => u.id !== userId);
       setAdminUsers(nextUsers);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("cmlab_admin_users_backup", JSON.stringify(nextUsers));
-      }
       await persistState({ adminUsers: nextUsers });
     },
     [adminUsers, persistState]
@@ -948,6 +913,8 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
         isLoaded,
         loginAdmin,
         logoutAdmin,
+        changeOwnPassword,
+        resetUserPassword,
         addOrUpdateAdminUser,
         deleteAdminUser,
         updatePixSettings,

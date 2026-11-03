@@ -16,12 +16,16 @@
   body {
     background-color: #FAF7F2;
     color: #4A4F3B;
-    font-family: var(--font-jakarta), sans-serif;
+    font-family: var(--font-outfit), system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
 
-  h1, h2, h3, .font-atelier-title {
-    font-family: var(--font-cormorant), Georgia, serif;
+  /* Geométrica em corpo grande fica solta; o tracking negativo recompõe a
+     palavra. Vale para os títulos marcados com .font-serif também, que é como
+     a maior parte da interface declara título. */
+  h1, h2, h3, .font-serif, .font-atelier-title {
+    font-family: var(--font-outfit), system-ui, sans-serif;
+    letter-spacing: -0.015em;
   }
 }
 

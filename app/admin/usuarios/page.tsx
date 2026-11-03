@@ -18,17 +18,6 @@ import {
   RotateCcw,
 } from "lucide-react";
 
-function buildDefaultPasswordFromFullName(fullName: string): string {
-  const firstName = (fullName || "")
-    .trim()
-    .split(/\s+/)[0]
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-  return `${firstName || "nome"}@12345`;
-}
-
 function formatBrazilPhone(raw: string): string {
   let digits = (raw || "").replace(/\D/g, "");
   if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
@@ -56,6 +45,7 @@ export default function AdminUsuariosPage() {
     currentAdminUser,
     addOrUpdateAdminUser,
     deleteAdminUser,
+    resetUserPassword,
   } = useCMLabStore();
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -66,7 +56,7 @@ export default function AdminUsuariosPage() {
   const [role, setRole] = useState<AdminUserRole>("gerente");
   const [feedback, setFeedback] = useState<string>("");
 
-  const previewDefaultPassword = buildDefaultPasswordFromFullName(fullName);
+  const [temporaryPassword, setTemporaryPassword] = useState<string>("");
 
   const isAdminRole =
     !currentAdminUser ||
@@ -98,22 +88,20 @@ export default function AdminUsuariosPage() {
   };
 
   const handleResetUserPasswordToDefault = async (u: AdminUser) => {
-    const defaultPass = buildDefaultPasswordFromFullName(u.full_name);
     if (
       !confirm(
-        `Resetar a senha de "${u.full_name}" para a senha padrão de 1º acesso "${defaultPass}"?`
+        `Gerar uma nova senha temporária para "${u.full_name}"? A senha atual deixa de valer imediatamente.`
       )
     ) {
       return;
     }
-    await addOrUpdateAdminUser({
-      ...u,
-      password: defaultPass,
-      must_change_password: true,
-    });
-    setFeedback(
-      `Senha de "${u.full_name}" redefinida para "${defaultPass}" (troca obrigatória no próximo login).`
-    );
+    const result = await resetUserPassword(u.id);
+    if (result.ok && result.temporaryPassword) {
+      setTemporaryPassword(result.temporaryPassword);
+      setFeedback(`Nova senha temporária gerada para "${u.full_name}".`);
+    } else {
+      setFeedback(result.error || "Não foi possível gerar a senha temporária.");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -134,7 +122,6 @@ export default function AdminUsuariosPage() {
       ? adminUsers.find((u) => u.id === editingId)
       : undefined;
 
-    const generatedDefaultPassword = buildDefaultPasswordFromFullName(fullName);
     const isMaster = Boolean(
       existing?.is_master || existing?.username === "conradosmn"
     );
@@ -143,7 +130,6 @@ export default function AdminUsuariosPage() {
       id: editingId || `usr-${Date.now()}`,
       username: isMaster ? "conradosmn" : derivedUsername,
       email: email.trim(),
-      password: existing ? existing.password : generatedDefaultPassword,
       full_name: fullName.trim(),
       phone: formatBrazilPhone(phone),
       role: isMaster ? "admin" : role,
@@ -153,11 +139,23 @@ export default function AdminUsuariosPage() {
     };
 
     await addOrUpdateAdminUser(payload);
-    setFeedback(
-      editingId
-        ? `Dados e perfil de "${payload.full_name}" atualizados com sucesso!`
-        : `Usuário "${payload.full_name}" (${payload.role?.toUpperCase()}) cadastrado! Senha inicial: ${generatedDefaultPassword}.`
-    );
+
+    if (editingId) {
+      setFeedback(`Dados e perfil de "${payload.full_name}" atualizados com sucesso!`);
+    } else {
+      // A senha temporária é gerada no servidor e devolvida uma única vez.
+      const result = await resetUserPassword(payload.id);
+      if (result.ok && result.temporaryPassword) {
+        setTemporaryPassword(result.temporaryPassword);
+        setFeedback(
+          `Usuário "${payload.full_name}" (${payload.role?.toUpperCase()}) cadastrado.`
+        );
+      } else {
+        setFeedback(
+          `Usuário criado, mas a senha temporária falhou: ${result.error || "erro desconhecido"}. Use "Gerar senha" na lista.`
+        );
+      }
+    }
     resetForm();
   };
 
@@ -255,6 +253,25 @@ export default function AdminUsuariosPage() {
               <div className="p-3 rounded-xl bg-emerald-600/10 border border-emerald-600/30 text-emerald-900 text-xs font-medium flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
                 <span>{feedback}</span>
+              </div>
+            )}
+
+            {temporaryPassword && (
+              <div className="p-3.5 rounded-xl bg-argila/20 border-2 border-terracota/60 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-terracota uppercase tracking-wider">
+                  <KeyRound className="w-4 h-4 shrink-0" />
+                  <span>Anote agora — não será exibida de novo</span>
+                </div>
+                <code className="block px-3 py-2 rounded-lg bg-areia border border-borda text-musgo font-bold text-lg text-center select-all break-all">
+                  {temporaryPassword}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => setTemporaryPassword("")}
+                  className="w-full py-2 rounded-lg bg-areia hover:bg-borda/50 border border-borda text-oliva hover:text-musgo text-xs font-semibold transition"
+                >
+                  Já anotei, ocultar
+                </button>
               </div>
             )}
 
@@ -368,19 +385,14 @@ export default function AdminUsuariosPage() {
 
             {!editingId && (
               <div className="p-3.5 rounded-2xl bg-linho border border-borda space-y-1">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-oliva font-semibold flex items-center gap-1.5">
-                    <KeyRound className="w-3.5 h-3.5 text-terracota" />
-                    Senha Padrão do 1º Acesso:
-                  </span>
-                  <code className="px-2.5 py-0.5 rounded-lg bg-areia border border-borda text-musgo font-bold text-sm">
-                    {previewDefaultPassword}
-                  </code>
-                </div>
+                <span className="text-oliva font-semibold flex items-center gap-1.5 text-xs">
+                  <KeyRound className="w-3.5 h-3.5 text-terracota" />
+                  Senha temporária
+                </span>
                 <p className="text-[11px] text-oliva">
-                  Ao entrar pela primeira vez com{" "}
-                  <strong>{previewDefaultPassword}</strong>, o sistema pedirá
-                  para o usuário criar sua própria senha.
+                  O servidor gera uma senha aleatória ao salvar e a exibe aqui{" "}
+                  <strong>uma única vez</strong> — anote e repasse ao titular.
+                  No primeiro acesso o sistema pede para ele criar a própria senha.
                 </p>
               </div>
             )}
@@ -409,9 +421,6 @@ export default function AdminUsuariosPage() {
 
             <div className="space-y-3">
               {adminUsers.map((u) => {
-                const defaultPassForUser = buildDefaultPasswordFromFullName(
-                  u.full_name
-                );
                 const userRole: AdminUserRole =
                   u.is_master || u.username === "conradosmn"
                     ? "admin"
@@ -448,7 +457,7 @@ export default function AdminUsuariosPage() {
                         {!u.is_master &&
                           (u.must_change_password ? (
                             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-argila/25 text-terracota border border-argila/50">
-                              1º Acesso ({u.password})
+                              Aguardando 1º Acesso
                             </span>
                           ) : (
                             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-600/15 text-emerald-800">
@@ -492,7 +501,7 @@ export default function AdminUsuariosPage() {
                         <button
                           type="button"
                           onClick={() => handleResetUserPasswordToDefault(u)}
-                          title={`Redefinir para a senha inicial ${defaultPassForUser}`}
+                          title="Gerar nova senha temporária"
                           className="px-2.5 py-2 rounded-xl bg-areia hover:bg-borda/50 border border-borda text-xs font-medium text-oliva hover:text-musgo flex items-center gap-1 transition"
                         >
                           <RotateCcw className="w-3.5 h-3.5 text-terracota" />

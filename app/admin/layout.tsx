@@ -25,10 +25,11 @@ export default function AdminLayout({
     currentAdminUser,
     loginAdmin,
     logoutAdmin,
-    addOrUpdateAdminUser,
+    changeOwnPassword,
   } = useCMLabStore();
 
   const [hydrated, setHydrated] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [loginInput, setLoginInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -44,12 +45,14 @@ export default function AdminLayout({
     setHydrated(true);
   }, []);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
-    const ok = loginAdmin(loginInput, passwordInput);
-    if (!ok) {
-      setErrorMsg("Usuário/e-mail ou senha inválidos. Verifique e tente novamente.");
+    setSubmitting(true);
+    const result = await loginAdmin(loginInput, passwordInput);
+    setSubmitting(false);
+    if (!result.ok) {
+      setErrorMsg(result.error || "Usuário/e-mail ou senha inválidos.");
     } else {
       setPasswordInput("");
     }
@@ -61,28 +64,24 @@ export default function AdminLayout({
     if (!currentAdminUser) return;
 
     const cleanNew = newPassword.trim();
-    if (cleanNew.length < 6) {
-      setChangeErrorMsg("A nova senha deve ter pelo menos 6 caracteres.");
+    if (cleanNew.length < 8) {
+      setChangeErrorMsg("A nova senha deve ter pelo menos 8 caracteres.");
       return;
     }
     if (cleanNew !== confirmPassword.trim()) {
       setChangeErrorMsg("A confirmação de senha não confere.");
       return;
     }
-    if (
-      cleanNew.toLowerCase() === currentAdminUser.password.trim().toLowerCase()
-    ) {
-      setChangeErrorMsg(
-        "Escolha uma senha pessoal diferente da senha temporária padrão."
-      );
+
+    // A comparação com a senha atual acontece no servidor: o navegador não
+    // tem mais acesso a nenhuma forma da senha.
+    setSubmitting(true);
+    const result = await changeOwnPassword(cleanNew);
+    setSubmitting(false);
+    if (!result.ok) {
+      setChangeErrorMsg(result.error || "Não foi possível trocar a senha.");
       return;
     }
-
-    await addOrUpdateAdminUser({
-      ...currentAdminUser,
-      password: cleanNew,
-      must_change_password: false,
-    });
     setNewPassword("");
     setConfirmPassword("");
   };
@@ -180,10 +179,11 @@ export default function AdminLayout({
 
             <button
               type="submit"
-              className="w-full py-3.5 rounded-2xl bg-terracota hover:bg-terracota-hover text-white font-semibold text-sm shadow-md transition flex items-center justify-center gap-2"
+              disabled={submitting}
+              className="w-full py-3.5 rounded-2xl bg-terracota hover:bg-terracota-hover disabled:opacity-60 text-white font-semibold text-sm shadow-md transition flex items-center justify-center gap-2"
             >
               <Lock className="w-4 h-4" />
-              <span>Entrar no Painel Admin</span>
+              <span>{submitting ? "Entrando..." : "Entrar no Painel Admin"}</span>
             </button>
           </form>
         </div>
@@ -227,11 +227,8 @@ export default function AdminLayout({
               Olá, {currentAdminUser.full_name.split(" ")[0]}!
             </h1>
             <p className="text-xs text-oliva leading-relaxed">
-              Você entrou com a senha temporária padrão (
-              <code className="font-bold text-musgo">
-                {currentAdminUser.password}
-              </code>
-              ). Para continuar, defina agora sua nova senha pessoal de acesso.
+              Você entrou com uma senha temporária. Para continuar, defina agora
+              sua senha pessoal de acesso — mínimo de 8 caracteres.
             </p>
           </div>
 
@@ -252,7 +249,7 @@ export default function AdminLayout({
                 <input
                   type={showNewPassword ? "text" : "password"}
                   required
-                  minLength={6}
+                  minLength={8}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Mínimo de 6 caracteres"
@@ -281,7 +278,7 @@ export default function AdminLayout({
                 <input
                   type={showNewPassword ? "text" : "password"}
                   required
-                  minLength={6}
+                  minLength={8}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Repita a nova senha"
@@ -292,10 +289,11 @@ export default function AdminLayout({
 
             <button
               type="submit"
-              className="w-full py-3.5 rounded-2xl bg-terracota hover:bg-terracota-hover text-white font-semibold text-sm shadow-md transition flex items-center justify-center gap-2"
+              disabled={submitting}
+              className="w-full py-3.5 rounded-2xl bg-terracota hover:bg-terracota-hover disabled:opacity-60 text-white font-semibold text-sm shadow-md transition flex items-center justify-center gap-2"
             >
               <ShieldCheck className="w-4 h-4" />
-              <span>Salvar Nova Senha e Acessar Painel</span>
+              <span>{submitting ? "Salvando..." : "Salvar Nova Senha e Acessar Painel"}</span>
             </button>
           </form>
         </div>

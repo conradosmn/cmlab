@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import { cookies } from "next/headers";
 import {
   INITIAL_ACCESSORIES,
   INITIAL_ADMIN_USERS,
@@ -9,92 +8,62 @@ import {
   INITIAL_PRINTERS,
   INITIAL_PRODUCTS,
 } from "@/lib/seedData";
-import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
+import { isSupabaseConfigured } from "@/lib/supabaseClient";
+import { supabaseAdmin as supabase } from "@/lib/supabaseAdmin";
+import { SESSION_COOKIE, readSessionToken, toPublicAdminUsers } from "@/lib/authServer";
+import {
+  SYS_CONFIG_ACC_ID,
+  ensureMasterAdmin,
+  readLocalDb,
+  writeLocalDb,
+} from "@/lib/serverStore";
+import { AdminUser, PrintQueueOrder } from "@/lib/types";
 
-const DATA_DIR = path.join(process.cwd(), ".data");
-const DB_FILE = path.join(DATA_DIR, "cmlab-db.json");
-const SYS_CONFIG_ACC_ID = "__cmlab_system_config__";
+export const runtime = "nodejs";
 
-function ensureMasterAdmin(users: any[] | undefined) {
-  const list = Array.isArray(users) ? [...users] : [];
-  for (const seedUser of INITIAL_ADMIN_USERS) {
-    const exists = list.some(
-      (u) => u.username?.toLowerCase() === seedUser.username.toLowerCase()
-    );
-    if (!exists) {
-      if (seedUser.is_master) {
-        list.unshift(seedUser);
-      } else {
-        list.push(seedUser);
-      }
-    }
-  }
-  return list.map((u) => {
-    const isMaster =
-      u.is_master || u.username?.toLowerCase() === "conradosmn";
-    if (isMaster) {
-      return { ...u, is_master: true, role: "admin" };
-    }
-    return {
-      ...u,
-      role: u.role || "gerente",
+async function hasAdminSession(): Promise<boolean> {
+  const store = await cookies();
+  const session = await readSessionToken(store.get(SESSION_COOKIE)?.value);
+  return Boolean(session);
+}
+
+/**
+ * A vitrine pública precisa dos pedidos para estimar a fila, mas não dos dados
+ * pessoais de quem comprou. Sem sessão, some tudo que identifica o cliente.
+ */
+function stripOrderPii(orders: PrintQueueOrder[]): PrintQueueOrder[] {
+  return (orders || []).map((o) => ({
+    ...o,
+    customer_name: "",
+    customer_whatsapp: "",
+    delivery_sector: "",
+    mp_payment_id: undefined,
+  }));
+}
+
+/**
+ * O cliente nunca recebe nem envia password_hash. Num POST, o hash gravado é
+ * sempre o que já existia no servidor — caso contrário uma atualização de
+ * cadastro apagaria a senha de todos os usuários.
+ */
+function mergeAdminUsersPreservingHashes(
+  incoming: AdminUser[] | undefined,
+  existing: AdminUser[]
+): AdminUser[] {
+  if (!Array.isArray(incoming)) return existing;
+  const byId = new Map(existing.map((u) => [u.id, u]));
+  return incoming.map((u) => {
+    const prev = byId.get(u.id);
+    const { password_hash: _ignored, ...clean } = u as AdminUser & {
+      password_hash?: string;
     };
+    return { ...clean, password_hash: prev?.password_hash };
   });
 }
 
-function readLocalDb() {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    if (!fs.existsSync(DB_FILE)) {
-      const initial = {
-        adminUsers: INITIAL_ADMIN_USERS,
-        printers: INITIAL_PRINTERS,
-        filaments: INITIAL_FILAMENTS,
-        accessories: INITIAL_ACCESSORIES,
-        products: INITIAL_PRODUCTS,
-        orders: INITIAL_ORDERS,
-        updatedAt: Date.now(),
-      };
-      fs.writeFileSync(DB_FILE, JSON.stringify(initial, null, 2), "utf-8");
-      return initial;
-    }
-    const raw = fs.readFileSync(DB_FILE, "utf-8");
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed.printers) || parsed.printers.length === 0) {
-      parsed.printers = INITIAL_PRINTERS;
-    }
-    parsed.adminUsers = ensureMasterAdmin(parsed.adminUsers);
-    return parsed;
-  } catch {
-    return {
-      adminUsers: INITIAL_ADMIN_USERS,
-      printers: INITIAL_PRINTERS,
-      filaments: INITIAL_FILAMENTS,
-      accessories: INITIAL_ACCESSORIES,
-      products: INITIAL_PRODUCTS,
-      orders: INITIAL_ORDERS,
-      updatedAt: Date.now(),
-    };
-  }
-}
-
-function writeLocalDb(data: any) {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    const payload = { ...data, updatedAt: Date.now() };
-    fs.writeFileSync(DB_FILE, JSON.stringify(payload, null, 2), "utf-8");
-    return payload;
-  } catch (e) {
-    console.error("Failed to write local db", e);
-    return data;
-  }
-}
-
 export async function GET() {
+  const authed = await hasAdminSession();
+
   if (isSupabaseConfigured && supabase) {
     try {
       const [filRes, accRes, prodRes, ordRes] = await Promise.all([
@@ -131,8 +100,14 @@ export async function GET() {
             : local.printers || INITIAL_PRINTERS;
         const remotePixSettings = parsedSysConfig.pixSettings || local.pixSettings;
 
+        const orders = (ordRes.data || []).map((o: any) => ({
+          ...o,
+          total_price: Number(o.total_price),
+        }));
+
         return NextResponse.json({
-          adminUsers: remoteAdminUsers,
+          // Lista de usuários só para quem está autenticado, e sempre sem hash.
+          adminUsers: authed ? toPublicAdminUsers(remoteAdminUsers) : [],
           printers: remotePrinters,
           filaments: (filRes.data || []).map((f: any) => ({
             ...f,
@@ -155,12 +130,10 @@ export async function GET() {
             price: Number(p.price),
             accessories: p.accessories || [],
           })),
-          orders: (ordRes.data || []).map((o: any) => ({
-            ...o,
-            total_price: Number(o.total_price),
-          })),
+          orders: authed ? orders : stripOrderPii(orders),
           pixSettings: remotePixSettings,
           source: "supabase",
+          authenticated: authed,
           updatedAt: Date.now(),
         });
       } else {
@@ -177,15 +150,36 @@ export async function GET() {
   }
 
   const db = readLocalDb();
-  return NextResponse.json({ ...db, source: "local" });
+  return NextResponse.json({
+    ...db,
+    adminUsers: authed ? toPublicAdminUsers(db.adminUsers || []) : [],
+    orders: authed ? db.orders || [] : stripOrderPii(db.orders || []),
+    source: "local",
+    authenticated: authed,
+  });
 }
 
+/**
+ * Mutações administrativas. O middleware já recusa esta rota sem sessão válida;
+ * a verificação abaixo é a segunda tranca, caso o matcher mude.
+ */
 export async function POST(req: Request) {
+  if (!(await hasAdminSession())) {
+    return NextResponse.json(
+      { error: "Não autorizado. Faça login no painel administrativo." },
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await req.json();
     const local = readLocalDb();
+    const existingUsers = ensureMasterAdmin(local.adminUsers);
+
     const next = writeLocalDb({
-      adminUsers: ensureMasterAdmin(body.adminUsers ?? local.adminUsers),
+      adminUsers: ensureMasterAdmin(
+        mergeAdminUsersPreservingHashes(body.adminUsers, existingUsers)
+      ),
       printers: body.printers ?? local.printers,
       filaments: body.filaments ?? local.filaments,
       accessories: body.accessories ?? local.accessories,
@@ -196,7 +190,7 @@ export async function POST(req: Request) {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        // Lê config atual do Supabase para não sobrescrever em ambientes serverless (Netlify)
+        // Lê config atual do Supabase para não sobrescrever em ambientes serverless (Netlify/Vercel)
         const { data: existingSysRow } = await supabase
           .from("accessories")
           .select("supplier")
@@ -214,7 +208,12 @@ export async function POST(req: Request) {
 
         const mergedSys = {
           adminUsers: ensureMasterAdmin(
-            body.adminUsers ?? prevSys.adminUsers ?? next.adminUsers
+            body.adminUsers !== undefined
+              ? mergeAdminUsersPreservingHashes(
+                  body.adminUsers,
+                  ensureMasterAdmin(prevSys.adminUsers || existingUsers)
+                )
+              : prevSys.adminUsers ?? next.adminUsers
           ),
           printers: body.printers ?? prevSys.printers ?? next.printers,
           pixSettings: body.pixSettings ?? prevSys.pixSettings ?? next.pixSettings,
@@ -306,7 +305,11 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ ...next, source: isSupabaseConfigured ? "supabase" : "local" });
+    return NextResponse.json({
+      ...next,
+      adminUsers: toPublicAdminUsers(next.adminUsers || []),
+      source: isSupabaseConfigured ? "supabase" : "local",
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

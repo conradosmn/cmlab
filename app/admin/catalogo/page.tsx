@@ -38,42 +38,6 @@ import {
   Printer,
 } from "lucide-react";
 
-const DEMO_MAKERWORLD_PRESETS = [
-  {
-    title: "Cachepot Textura Tricô Nórdico (Perfil A1)",
-    category: "decoracao" as ProductCategory,
-    weight_grams: 185,
-    print_time_minutes: 265,
-    image:
-      "https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?auto=format&fit=crop&w=900&q=80",
-    defaultAccessories: [{ accessory_id: "acc-silicone", quantity: 4 }],
-  },
-  {
-    title: "Luminária Cúpula Origami Zen (Perfil A1 >6h)",
-    category: "decoracao" as ProductCategory,
-    weight_grams: 260,
-    print_time_minutes: 430,
-    image:
-      "https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=900&q=80",
-    defaultAccessories: [
-      { accessory_id: "acc-led", quantity: 1 },
-      { accessory_id: "acc-silicone", quantity: 4 },
-    ],
-  },
-  {
-    title: "Chaveiro Medalha São Bento Bicolor (Perfil A1)",
-    category: "chaveiros" as ProductCategory,
-    weight_grams: 14,
-    print_time_minutes: 28,
-    image:
-      "https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=900&q=80",
-    defaultAccessories: [
-      { accessory_id: "acc-corrente", quantity: 1 },
-      { accessory_id: "acc-ilha", quantity: 1 },
-    ],
-  },
-];
-
 export default function AdminCatalogoPage() {
   const {
     currentAdminUser,
@@ -130,6 +94,13 @@ export default function AdminCatalogoPage() {
   >([]);
   const [readyStockQty, setReadyStockQty] = useState<number>(0);
   const [salePrice, setSalePrice] = useState<number>(35.0);
+  /**
+   * Enquanto false, o preço final acompanha o preço sugerido pelo markup, para
+   * que o lucro líquido reflita a margem que está na tela. Passa a true quando
+   * o preço é digitado à mão ou herdado de um produto em edição — aí o valor
+   * escolhido manda, e mexer na margem não o sobrescreve.
+   */
+  const [priceOverridden, setPriceOverridden] = useState(false);
 
   const resetCatalogForm = () => {
     setEditingId(null);
@@ -149,6 +120,7 @@ export default function AdminCatalogoPage() {
     setSelectedAccessories([]);
     setReadyStockQty(0);
     setSalePrice(35.0);
+    setPriceOverridden(false);
   };
 
   // Mini-modal inline para criar um novo recurso rápido (ex: novo tipo de chaveiro ou gota de silicone) sem sair da tela
@@ -245,6 +217,15 @@ export default function AdminCatalogoPage() {
     salePrice,
     mpFeePercent,
   ]);
+
+  // O preço sugerido deriva do custo e do markup — nunca do preço final — então
+  // ajustá-lo aqui não realimenta o cálculo.
+  const suggestedPriceRounded = Math.ceil(costBreakdown.suggestedSalePriceBrl);
+
+  useEffect(() => {
+    if (priceOverridden) return;
+    setSalePrice((prev) => (prev === suggestedPriceRounded ? prev : suggestedPriceRounded));
+  }, [suggestedPriceRounded, priceOverridden]);
 
   const handleQuickAddResource = async () => {
     if (!quickResName.trim()) return;
@@ -472,12 +453,9 @@ export default function AdminCatalogoPage() {
         }
       }
 
-      // Sugere um preço comercial justo automático caso tenha extraído peso e tempo
-      if (parsed.weightGrams > 0 && parsed.printTimeMinutes > 0) {
-        const autoSuggestedPrice =
-          Math.ceil((parsed.weightGrams * 0.34 + parsed.printTimeMinutes * 0.11) / 5) * 5;
-        setSalePrice(Math.max(25, autoSuggestedPrice));
-      }
+      // Peso e tempo novos mudam o custo; o preço volta a seguir a margem em vez
+      // de uma heurística por grama, que ignorava acessórios e mão de obra.
+      setPriceOverridden(false);
 
       const sourceLabel =
         parsed.weightSource === "slice_info"
@@ -502,26 +480,6 @@ export default function AdminCatalogoPage() {
       setImportLoading(false);
       e.target.value = "";
     }
-  };
-
-  const handleLoadPreset = (preset: (typeof DEMO_MAKERWORLD_PRESETS)[0]) => {
-    setEditingId(null);
-    setName(preset.title);
-    setCategory(preset.category);
-    setWeightGrams(preset.weight_grams);
-    setPrintTimeMinutes(preset.print_time_minutes);
-    setBaseWeight100(preset.weight_grams);
-    setBaseTime100(preset.print_time_minutes);
-    setCatalogScaleDelta(0);
-    setProductImages([preset.image]);
-    setSelectedAccessories(preset.defaultAccessories);
-    const suggestedPrice =
-      Math.ceil((preset.weight_grams * 0.35 + preset.print_time_minutes * 0.12) / 5) * 5;
-    setSalePrice(Math.max(20, suggestedPrice));
-    setImportMessage({
-      type: "info",
-      text: `Preset Bambu Lab A1 carregado: "${preset.title}" com recursos pré-selecionados!`,
-    });
   };
 
   const handleSaveProduct = async (e: React.FormEvent) => {
@@ -591,6 +549,7 @@ export default function AdminCatalogoPage() {
     setSelectedAccessories(p.accessories || []);
     setReadyStockQty(p.ready_stock_qty || 0);
     setSalePrice(p.price);
+    setPriceOverridden(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -671,21 +630,6 @@ export default function AdminCatalogoPage() {
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <span className="text-xs text-oliva font-medium">
-              Testar com Perfis Reais A1:
-            </span>
-            {DEMO_MAKERWORLD_PRESETS.map((preset, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => handleLoadPreset(preset)}
-                className="px-3 py-1.5 rounded-xl bg-linho hover:bg-borda/40 border border-borda text-xs text-musgo font-medium transition"
-              >
-                + {preset.title} ({preset.weight_grams}g / {preset.print_time_minutes}m)
-              </button>
-            ))}
-          </div>
 
           {importMessage && (
             <div
@@ -1567,15 +1511,22 @@ export default function AdminCatalogoPage() {
                         .replace(".", ",")}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSalePrice(Math.ceil(costBreakdown.suggestedSalePriceBrl))
-                    }
-                    className="px-3 py-2 rounded-xl bg-musgo hover:bg-musgo/90 text-linho text-xs font-semibold transition shrink-0"
-                  >
-                    Aplicar R$ {Math.ceil(costBreakdown.suggestedSalePriceBrl)}
-                  </button>
+                  {priceOverridden ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSalePrice(suggestedPriceRounded);
+                        setPriceOverridden(false);
+                      }}
+                      className="px-3 py-2 rounded-xl bg-musgo hover:bg-musgo/90 text-linho text-xs font-semibold transition shrink-0"
+                    >
+                      Aplicar R$ {suggestedPriceRounded}
+                    </button>
+                  ) : (
+                    <span className="px-3 py-2 rounded-xl bg-areia border border-borda text-oliva text-xs font-semibold shrink-0">
+                      Preço final acompanhando
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1586,9 +1537,14 @@ export default function AdminCatalogoPage() {
                     <label className="text-xs font-bold uppercase text-terracota block">
                       Preço Final de Venda (Digite o Valor R$)
                     </label>
-                    <span className="text-[11px] text-oliva">
+                    <span className="text-[11px] text-oliva block">
                       Markup efetivo: {costBreakdown.markupMultiplier}x (
                       {costBreakdown.realMarkupPercent}% s/ custo)
+                    </span>
+                    <span className="text-[11px] text-oliva">
+                      {priceOverridden
+                        ? "Valor manual — não segue a margem acima."
+                        : "Seguindo a margem acima. Digite para fixar um valor."}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 bg-areia px-3 py-2 rounded-xl border-2 border-terracota/50 focus-within:border-terracota">
@@ -1602,6 +1558,7 @@ export default function AdminCatalogoPage() {
                       onChange={(e) => {
                         const raw = e.target.value;
                         setSalePrice(raw === "" ? 0 : Number(raw));
+                        setPriceOverridden(true);
                       }}
                       className="w-24 bg-transparent text-right text-xl font-serif font-bold text-musgo focus:outline-none"
                     />

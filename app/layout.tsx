@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import {
-  Cormorant_Garamond,
-  Plus_Jakarta_Sans,
+  Outfit,
   Fredoka,
   Montserrat,
   Pacifico,
@@ -9,16 +8,11 @@ import {
 import "./globals.css";
 import { CMLabProvider } from "@/lib/store";
 
-const cormorant = Cormorant_Garamond({
+// Fonte única do painel: títulos e corpo se distinguem por peso e tamanho.
+const outfit = Outfit({
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-cormorant",
-});
-
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-jakarta",
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-outfit",
 });
 
 const fredoka = Fredoka({
@@ -59,7 +53,7 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${cormorant.variable} ${jakarta.variable} ${fredoka.variable} ${montserrat.variable} ${pacifico.variable}`}
+      className={`${outfit.variable} ${fredoka.variable} ${montserrat.variable} ${pacifico.variable}`}
     >
       <body className="min-h-screen bg-linho text-musgo selection:bg-argila/30 selection:text-musgo">
         <CMLabProvider>{children}</CMLabProvider>

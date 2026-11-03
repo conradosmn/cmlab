@@ -138,7 +138,11 @@ export interface AdminUser {
   id: string;
   username: string;
   email: string;
-  password: string;
+  /**
+   * Hash bcrypt da senha. Existe apenas no servidor: toda resposta enviada ao
+   * cliente passa por toPublicAdminUser() em lib/authServer.ts, que o remove.
+   */
+  password_hash?: string;
   full_name: string;
   phone: string;
   role?: AdminUserRole;

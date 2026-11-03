@@ -21,8 +21,10 @@ const config: Config = {
         argila: "#C89D7C",
       },
       fontFamily: {
-        serif: ["var(--font-cormorant)", "Cormorant Garamond", "Georgia", "serif"],
-        sans: ["var(--font-jakarta)", "Plus Jakarta Sans", "Montserrat", "sans-serif"],
+        // font-serif continua existindo porque 83 títulos já a usam; aponta
+        // para a mesma Outfit, então a troca não tocou em nenhum componente.
+        serif: ["var(--font-outfit)", "Outfit", "system-ui", "sans-serif"],
+        sans: ["var(--font-outfit)", "Outfit", "system-ui", "sans-serif"],
         fredoka: ["var(--font-fredoka)", "Fredoka", "sans-serif"],
         montserrat: ["var(--font-montserrat)", "Montserrat", "sans-serif"],
         pacifico: ["var(--font-pacifico)", "Pacifico", "cursive"],
