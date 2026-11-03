@@ -28,16 +28,8 @@ import {
 
 const KIOSK_IDLE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutos ocioso -> Modo Porta-Retrato
 
-const CATEGORY_TABS: { id: "all" | ProductCategory; label: string }[] = [
-  { id: "all", label: "Coleção Completa" },
-  { id: "decoracao", label: "Vasos & Luminárias" },
-  { id: "religioso", label: "Artigos Religiosos" },
-  { id: "fidgets", label: "Fidgets & Mimos" },
-  { id: "chaveiros", label: "Chaveiros Personalizados" },
-];
-
 export default function FeiraKioskPage() {
-  const { products, filaments, nextDeliveryEstimate } = useCMLabStore();
+  const { products, filaments, nextDeliveryEstimate, productCategories } = useCMLabStore();
 
   const [selectedCategory, setSelectedCategory] = useState<"all" | ProductCategory>("all");
   const [activeImageIdxMap, setActiveImageIdxMap] = useState<Record<string, number>>({});
@@ -106,6 +98,18 @@ export default function FeiraKioskPage() {
         (selectedCategory === "all" || p.category === selectedCategory)
     );
   }, [products, selectedCategory]);
+
+  // Só mostra abas de categorias que têm peça ativa — uma categoria recém-criada
+  // não aparece vazia na vitrine.
+  const categoryTabs = useMemo(() => {
+    const used = new Set(products.filter((p) => p.active).map((p) => p.category));
+    return [
+      { id: "all" as const, label: "Coleção Completa" },
+      ...productCategories
+        .filter((c) => used.has(c.id))
+        .map((c) => ({ id: c.id, label: c.label })),
+    ];
+  }, [products, productCategories]);
 
   const keychainProduct = useMemo<Product>(
     () =>
@@ -264,7 +268,7 @@ export default function FeiraKioskPage() {
         {/* Abas de Filtro Rápido da Coleção */}
         <div className="flex items-center justify-between flex-wrap gap-4 border-b border-borda pb-4">
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            {CATEGORY_TABS.map((tab) => {
+            {categoryTabs.map((tab) => {
               const active = selectedCategory === tab.id;
               return (
                 <button
@@ -400,10 +404,10 @@ export default function FeiraKioskPage() {
                   <div className="p-6 space-y-4">
                     <div>
                       <div className="text-[11px] uppercase tracking-widest text-oliva font-semibold">
-                        {product.category === "decoracao" && "Vasos & Luminárias"}
-                        {product.category === "religioso" && "Espiritualidade & Fé"}
-                        {product.category === "fidgets" && "Mimos & Fidgets"}
-                        {product.category === "chaveiros" && "Personalizados com Nome"}
+                        {(() => {
+                          const cat = productCategories.find((c) => c.id === product.category);
+                          return cat?.tagline || cat?.label || "";
+                        })()}
                       </div>
                       <h3 className="text-2xl font-serif font-bold text-musgo mt-0.5">
                         {product.name}

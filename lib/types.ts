@@ -1,4 +1,16 @@
-export type ProductCategory = "decoracao" | "religioso" | "fidgets" | "chaveiros";
+/**
+ * Slug da categoria (ex: "decoracao", "organizadores-de-escritorio").
+ * As categorias são cadastráveis — ver ProductCategoryDef e lib/categories.ts.
+ */
+export type ProductCategory = string;
+
+export interface ProductCategoryDef {
+  id: ProductCategory;
+  /** Nome curto, usado nos filtros e no cadastro. */
+  label: string;
+  /** Linha de destaque no card da vitrine (ex: "Espiritualidade & Fé"). */
+  tagline?: string;
+}
 
 export type AccessoryCategory =
   | "chaveiro"

@@ -123,6 +123,7 @@ export async function writeRemoteSysConfig(next: {
   adminUsers?: AdminUser[];
   printers?: any[];
   pixSettings?: any;
+  productCategories?: any[];
 }): Promise<void> {
   if (!isSupabaseConfigured || !supabase) return;
   const prev = await readRemoteSysConfig();
@@ -130,6 +131,9 @@ export async function writeRemoteSysConfig(next: {
     adminUsers: next.adminUsers ?? prev.adminUsers,
     printers: next.printers ?? prev.printers,
     pixSettings: next.pixSettings ?? prev.pixSettings,
+    // Precisa constar aqui: esta função regrava o JSON inteiro, e uma chave
+    // esquecida some (ex: trocar senha apagaria as categorias).
+    productCategories: next.productCategories ?? prev.productCategories,
   };
   await supabase.from("accessories").upsert([
     {

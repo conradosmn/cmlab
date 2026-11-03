@@ -99,6 +99,8 @@ export async function GET() {
             ? parsedSysConfig.printers
             : local.printers || INITIAL_PRINTERS;
         const remotePixSettings = parsedSysConfig.pixSettings || local.pixSettings;
+        const remoteProductCategories =
+          parsedSysConfig.productCategories || local.productCategories || [];
 
         const orders = (ordRes.data || []).map((o: any) => ({
           ...o,
@@ -132,6 +134,7 @@ export async function GET() {
           })),
           orders: authed ? orders : stripOrderPii(orders),
           pixSettings: remotePixSettings,
+          productCategories: remoteProductCategories,
           source: "supabase",
           authenticated: authed,
           updatedAt: Date.now(),
@@ -186,6 +189,7 @@ export async function POST(req: Request) {
       products: body.products ?? local.products,
       orders: body.orders ?? local.orders,
       pixSettings: body.pixSettings ?? local.pixSettings,
+      productCategories: body.productCategories ?? local.productCategories,
     });
 
     if (isSupabaseConfigured && supabase) {
@@ -217,12 +221,15 @@ export async function POST(req: Request) {
           ),
           printers: body.printers ?? prevSys.printers ?? next.printers,
           pixSettings: body.pixSettings ?? prevSys.pixSettings ?? next.pixSettings,
+          productCategories:
+            body.productCategories ?? prevSys.productCategories ?? next.productCategories,
         };
 
         if (
           body.adminUsers !== undefined ||
           body.printers !== undefined ||
           body.pixSettings !== undefined ||
+          body.productCategories !== undefined ||
           !existingSysRow
         ) {
           await supabase.from("accessories").upsert([

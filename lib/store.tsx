@@ -10,8 +10,10 @@ import {
   Printer3D,
   PrintQueueOrder,
   Product,
+  ProductCategoryDef,
   QueueStatus,
 } from "./types";
+import { mergeProductCategories, slugifyCategory } from "./categories";
 import {
   INITIAL_ACCESSORIES,
   INITIAL_ADMIN_USERS,
@@ -40,6 +42,7 @@ interface CMLabStoreContextValue {
   scheduledOrders: PrintQueueOrder[];
   nextDeliveryEstimate: Date;
   pixSettings: PixSettings;
+  productCategories: ProductCategoryDef[];
   isLoaded: boolean;
 
   // Auth & Users Actions
@@ -54,6 +57,8 @@ interface CMLabStoreContextValue {
 
   // Actions
   updatePixSettings: (settings: PixSettings) => Promise<void>;
+  /** Cria (ou devolve a existente com o mesmo nome) e já persiste. */
+  addProductCategory: (label: string, tagline?: string) => Promise<ProductCategoryDef | null>;
   clearDemoOrdersAndProducts: () => Promise<void>;
   addOrder: (
     orderInput: Omit<
@@ -215,6 +220,11 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
     merchantName: "Conrado de Sampaio Machado Neto",
     merchantCity: "Teresina",
   });
+  const [savedCategories, setSavedCategories] = useState<ProductCategoryDef[]>([]);
+  const productCategories = useMemo(
+    () => mergeProductCategories(savedCategories, products),
+    [savedCategories, products]
+  );
   const [isLoaded, setIsLoaded] = useState(false);
 
   const pendingMutationsRef = useRef(0);
@@ -293,6 +303,7 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
       );
       if (data.orders) setOrders(applySmartScheduleToOrders(data.orders));
       if (data.pixSettings) setPixSettings(data.pixSettings);
+      if (Array.isArray(data.productCategories)) setSavedCategories(data.productCategories);
       setIsLoaded(true);
     } catch {
       setIsLoaded(true);
@@ -308,6 +319,7 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
       products?: Product[];
       orders?: PrintQueueOrder[];
       pixSettings?: PixSettings;
+      productCategories?: ProductCategoryDef[];
     }) => {
       pendingMutationsRef.current += 1;
       lastMutationAtRef.current = Date.now();
@@ -864,6 +876,28 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
     [persistState]
   );
 
+  const addProductCategory = useCallback(
+    async (label: string, tagline?: string) => {
+      const cleanLabel = label.trim();
+      const id = slugifyCategory(cleanLabel);
+      if (!cleanLabel || !id) return null;
+      const existing = productCategories.find(
+        (c) => c.id === id || c.label.toLowerCase() === cleanLabel.toLowerCase()
+      );
+      if (existing) return existing;
+      const created: ProductCategoryDef = {
+        id,
+        label: cleanLabel,
+        tagline: tagline?.trim() || cleanLabel,
+      };
+      const nextSaved = [...savedCategories.filter((c) => c.id !== id), created];
+      setSavedCategories(nextSaved);
+      await persistState({ productCategories: nextSaved });
+      return created;
+    },
+    [productCategories, savedCategories, persistState]
+  );
+
   const clearDemoOrdersAndProducts = useCallback(async () => {
     // Mantém apenas o produto do Simulador de Chaveiro Personalizado (para o banner da feira) e zera pedidos de demonstração
     const keychainOnly = products.filter((p) => p.is_custom_keychain);
@@ -910,6 +944,7 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
         scheduledOrders,
         nextDeliveryEstimate,
         pixSettings,
+        productCategories,
         isLoaded,
         loginAdmin,
         logoutAdmin,
@@ -918,6 +953,7 @@ export function CMLabProvider({ children }: { children: React.ReactNode }) {
         addOrUpdateAdminUser,
         deleteAdminUser,
         updatePixSettings,
+        addProductCategory,
         clearDemoOrdersAndProducts,
         addOrder,
         confirmOrderPayment,

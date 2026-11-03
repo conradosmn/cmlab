@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { Filament, Product } from "@/lib/types";
+import { useCMLabStore } from "@/lib/store";
 import {
   Sparkles,
   Hand,
@@ -38,6 +39,7 @@ export function KioskPortraitFrameModal({
   filaments,
   formattedNextSlot,
 }: KioskPortraitFrameModalProps) {
+  const { productCategories } = useCMLabStore();
   const [currentSlideIdx, setCurrentSlideIdx] = useState(0);
 
   // Monta todos os slides a partir das imagens de todos os produtos ativos
@@ -94,14 +96,8 @@ export function KioskPortraitFrameModal({
   const timeFormatted =
     hours > 0 ? `${hours}h${mins > 0 ? `${mins}m` : ""}` : `${mins} min`;
 
-  const categoryLabel =
-    product.category === "decoracao"
-      ? "Vasos & Luminárias"
-      : product.category === "religioso"
-      ? "Espiritualidade & Fé"
-      : product.category === "fidgets"
-      ? "Mimos & Fidgets"
-      : "Chaveiros Personalizados";
+  const category = productCategories.find((c) => c.id === product.category);
+  const categoryLabel = category?.tagline || category?.label || "";
 
   return (
     <div

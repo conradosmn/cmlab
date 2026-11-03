@@ -6,6 +6,7 @@ import { AdminNav } from "@/components/AdminNav";
 import { useCMLabStore } from "@/lib/store";
 import { calculate3DCosts } from "@/lib/costCalculator";
 import { compressImageBlobToDataUrl } from "@/lib/imageUtils";
+import { slugifyCategory } from "@/lib/categories";
 import {
   parseBambu3mfFile,
   calculateScaled3DMetrics,
@@ -25,6 +26,7 @@ import {
   Plus,
   Trash2,
   Check,
+  ChevronDown,
   Clock,
   Weight,
   Palette,
@@ -50,6 +52,8 @@ export default function AdminCatalogoPage() {
     addOrUpdateAccessory,
     deleteProduct,
     clearDemoOrdersAndProducts,
+    productCategories,
+    addProductCategory,
   } = useCMLabStore();
 
   const currentUserRole =
@@ -78,6 +82,48 @@ export default function AdminCatalogoPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [category, setCategory] = useState<ProductCategory>("decoracao");
+  // null = campo mostra o nome da categoria selecionada; string = usuário digitando.
+  const [categoryQuery, setCategoryQuery] = useState<string | null>(null);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+
+  const selectedCategoryLabel =
+    productCategories.find((c) => c.id === category)?.label ?? category;
+
+  const filteredCategories = useMemo(() => {
+    const q = (categoryQuery ?? "").trim().toLowerCase();
+    if (!q) return productCategories;
+    return productCategories.filter((c) => c.label.toLowerCase().includes(q));
+  }, [productCategories, categoryQuery]);
+
+  const canCreateCategory = useMemo(() => {
+    const q = (categoryQuery ?? "").trim();
+    if (!q) return false;
+    const slug = slugifyCategory(q);
+    return (
+      Boolean(slug) &&
+      !productCategories.some(
+        (c) => c.id === slug || c.label.toLowerCase() === q.toLowerCase()
+      )
+    );
+  }, [productCategories, categoryQuery]);
+
+  const applyCategory = (nextCat: ProductCategory) => {
+    setCategory(nextCat);
+    setCategoryQuery(null);
+    setIsCategoryDropdownOpen(false);
+    // Se mudar para chaveiros, sugere automaticamente 1x Corrente+Argola e 1x Ilha!
+    if (nextCat === "chaveiros") {
+      setSelectedAccessories([
+        { accessory_id: "acc-corrente", quantity: 1 },
+        { accessory_id: "acc-ilha", quantity: 1 },
+      ]);
+    }
+  };
+
+  const handleCreateCategory = async () => {
+    const created = await addProductCategory(categoryQuery ?? "");
+    if (created) applyCategory(created.id);
+  };
   const [description, setDescription] = useState("");
   const [productImages, setProductImages] = useState<string[]>([]);
   const [externalImageUrlInput, setExternalImageUrlInput] = useState("");
@@ -699,26 +745,79 @@ export default function AdminCatalogoPage() {
                 <label className="block text-xs font-semibold uppercase text-oliva mb-1">
                   Categoria Feira TCE
                 </label>
-                <select
-                  value={category}
-                  onChange={(e) => {
-                    const nextCat = e.target.value as ProductCategory;
-                    setCategory(nextCat);
-                    // Se mudar para chaveiros, sugere automaticamente 1x Corrente+Argola e 1x Ilha!
-                    if (nextCat === "chaveiros") {
-                      setSelectedAccessories([
-                        { accessory_id: "acc-corrente", quantity: 1 },
-                        { accessory_id: "acc-ilha", quantity: 1 },
-                      ]);
-                    }
-                  }}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-linho border border-borda text-sm text-musgo font-semibold"
-                >
-                  <option value="decoracao">Vasos & Luminárias</option>
-                  <option value="religioso">Artigos Religiosos</option>
-                  <option value="fidgets">Fidgets & Mimos</option>
-                  <option value="chaveiros">Chaveiros</option>
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={categoryQuery ?? selectedCategoryLabel}
+                    onFocus={(e) => {
+                      setIsCategoryDropdownOpen(true);
+                      e.currentTarget.select();
+                    }}
+                    onBlur={() => {
+                      setIsCategoryDropdownOpen(false);
+                      setCategoryQuery(null);
+                    }}
+                    onChange={(e) => {
+                      setCategoryQuery(e.target.value);
+                      setIsCategoryDropdownOpen(true);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (canCreateCategory) {
+                          void handleCreateCategory();
+                        } else if (filteredCategories[0]) {
+                          applyCategory(filteredCategories[0].id);
+                        }
+                      } else if (e.key === "Escape") {
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    placeholder="Escolha na lista ou digite nova categoria..."
+                    className="w-full pl-3.5 pr-9 py-2.5 rounded-xl bg-linho border border-borda text-sm text-musgo font-semibold focus:outline-none focus:ring-2 focus:ring-argila"
+                  />
+                  <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-oliva pointer-events-none" />
+
+                  {isCategoryDropdownOpen && (
+                    <div
+                      // onMouseDown evita que o blur do input feche a lista antes do clique.
+                      onMouseDown={(e) => e.preventDefault()}
+                      className="absolute z-20 mt-1 w-full max-h-60 overflow-y-auto rounded-2xl bg-linho border-2 border-borda shadow-atelier-lg p-1.5 space-y-1"
+                    >
+                      {canCreateCategory && (
+                        <button
+                          type="button"
+                          onClick={() => void handleCreateCategory()}
+                          className="w-full text-left px-3 py-2 rounded-xl bg-terracota text-white text-xs font-bold flex items-center justify-between"
+                        >
+                          <span>+ Criar categoria &quot;{categoryQuery?.trim()}&quot;</span>
+                          <span className="text-[10px] opacity-90">Salva na lista</span>
+                        </button>
+                      )}
+                      {filteredCategories.map((c) => {
+                        const isSelected = c.id === category;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => applyCategory(c.id)}
+                            className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between transition ${
+                              isSelected
+                                ? "bg-musgo text-linho font-semibold"
+                                : "text-musgo hover:bg-areia"
+                            }`}
+                          >
+                            <span>{c.label}</span>
+                            {isSelected && <Check className="w-3.5 h-3.5" />}
+                          </button>
+                        );
+                      })}
+                      {filteredCategories.length === 0 && !canCreateCategory && (
+                        <div className="px-3 py-2 text-xs text-oliva">Nenhuma categoria encontrada</div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
