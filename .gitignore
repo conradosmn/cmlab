@@ -21,3 +21,7 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# material de trabalho local (inclui arquivos de terceiros) e prints
+/Conteudos/
+Captura de tela*.png
